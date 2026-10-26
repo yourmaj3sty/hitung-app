@@ -1,0 +1,8 @@
+# Salin file ini menjadi android/key.properties lalu isi dengan keystore rilis Anda.
+# Membuat keystore:
+#   keytool -genkey -v -keystore %USERPROFILE%\hitung-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias hitung
+# JANGAN commit key.properties maupun file .jks ke repository.
+storePassword=GANTI_DENGAN_PASSWORD_KEYSTORE
+keyPassword=GANTI_DENGAN_PASSWORD_KEY
+keyAlias=hitung
+storeFile=C:/Users/NAMA_ANDA/hitung-release.jks
