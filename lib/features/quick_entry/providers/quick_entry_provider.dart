@@ -20,6 +20,8 @@ class QuickEntryState {
   final String note;
   final bool isSaving;
   final String? errorMessage;
+  /// Terisi saat mengedit transaksi yang sudah ada; null berarti transaksi baru.
+  final String? editingTransactionId;
 
   QuickEntryState({
     this.type = 'EXPENSE',
@@ -31,7 +33,10 @@ class QuickEntryState {
     this.note = '',
     this.isSaving = false,
     this.errorMessage,
+    this.editingTransactionId,
   }) : date = date ?? DateTime.now();
+
+  bool get isEditing => editingTransactionId != null;
 
   int get amount => int.tryParse(rawAmount) ?? 0;
   bool get canSave {
@@ -70,6 +75,7 @@ class QuickEntryState {
       note: note ?? this.note,
       isSaving: isSaving ?? this.isSaving,
       errorMessage: errorMessage,
+      editingTransactionId: editingTransactionId,
     );
   }
 }
@@ -118,6 +124,20 @@ class QuickEntryNotifier extends StateNotifier<QuickEntryState> {
       selectedWalletId: defaultWalletId,
       selectedToWalletId: defaultToWalletId,
       selectedCategoryId: _firstCategoryFor(type, categories),
+    );
+  }
+
+  /// Mengisi form dengan data transaksi yang akan diedit.
+  void loadForEdit(Transaction tx) {
+    state = QuickEntryState(
+      type: tx.type,
+      rawAmount: tx.amount.toString(),
+      selectedWalletId: tx.walletId,
+      selectedToWalletId: tx.toWalletId,
+      selectedCategoryId: tx.categoryId,
+      date: tx.transactionDate,
+      note: tx.note ?? '',
+      editingTransactionId: tx.id,
     );
   }
 
@@ -219,7 +239,7 @@ class QuickEntryNotifier extends StateNotifier<QuickEntryState> {
       final isTransfer = state.type == 'TRANSFER';
 
       final tx = TransactionsCompanion(
-        id: Value(const Uuid().v4()),
+        id: Value(state.editingTransactionId ?? const Uuid().v4()),
         walletId: Value(state.selectedWalletId!),
         toWalletId: Value(isTransfer ? state.selectedToWalletId : null),
         categoryId: Value(isTransfer ? null : state.selectedCategoryId),
@@ -231,7 +251,11 @@ class QuickEntryNotifier extends StateNotifier<QuickEntryState> {
       );
 
       // ACID Transaction (PRD Rule 4) — juga memvalidasi kecocokan kategori & dompet.
-      await db.createTransaction(tx);
+      if (state.isEditing) {
+        await db.updateTransactionWithRebalance(tx);
+      } else {
+        await db.createTransaction(tx);
+      }
 
       await prefs.setString(AppConstants.prefLastUsedWalletId, state.selectedWalletId!);
 

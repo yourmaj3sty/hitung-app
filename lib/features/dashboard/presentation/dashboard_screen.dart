@@ -229,6 +229,7 @@ class DashboardScreen extends ConsumerWidget {
                     return DailyTransactionGroupWidget(
                       dailyGroup: group,
                       onDelete: (item) => _deleteWithUndo(context, ref, item),
+                      onTap: (item) => QuickEntrySheet.show(context, editTransaction: item.transaction),
                     );
                   },
                   childCount: dailyGroups.length,

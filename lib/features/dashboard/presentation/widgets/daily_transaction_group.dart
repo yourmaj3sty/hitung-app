@@ -13,11 +13,14 @@ import '../../../../core/utils/color_utils.dart';
 class DailyTransactionGroupWidget extends StatelessWidget {
   final DailyTransactions dailyGroup;
   final ValueChanged<TransactionItem> onDelete;
+  /// Dipanggil saat baris transaksi diketuk (membuka mode edit).
+  final ValueChanged<TransactionItem>? onTap;
 
   const DailyTransactionGroupWidget({
     super.key,
     required this.dailyGroup,
     required this.onDelete,
+    this.onTap,
   });
 
   @override
@@ -110,7 +113,14 @@ class DailyTransactionGroupWidget extends StatelessWidget {
                         ),
                       );
                     },
-                    child: _buildTransactionTile(item),
+                    // Material transparan agar efek ketukan terlihat di atas kartu berwarna.
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: InkWell(
+                        onTap: onTap == null ? null : () => onTap!(item),
+                        child: _buildTransactionTile(item),
+                      ),
+                    ),
                   ),
                 );
               },

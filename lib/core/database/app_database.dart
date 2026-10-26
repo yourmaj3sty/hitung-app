@@ -304,6 +304,21 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
+  /// Mengubah transaksi secara atomik: efek saldo lama dibatalkan, data baru divalidasi,
+  /// lalu efek saldo baru diterapkan. Jika validasi gagal, semua perubahan dibatalkan.
+  /// ID dan waktu pembuatan (createdAt) transaksi asli dipertahankan.
+  Future<void> updateTransactionWithRebalance(TransactionsCompanion tx) {
+    return transaction(() async {
+      final old = await deleteTransactionWithRevert(tx.id.value);
+      if (old == null) throw const DataValidationException('Transaksi tidak ditemukan.');
+      await createTransaction(tx.copyWith(createdAt: Value(old.createdAt)));
+    });
+  }
+
+  Future<Transaction?> getTransactionById(String id) {
+    return (select(transactions)..where((t) => t.id.equals(id))).getSingleOrNull();
+  }
+
   // Restore deleted transaction (Undo support)
   Future<void> restoreTransaction(Transaction tx) {
     return createTransaction(TransactionsCompanion(

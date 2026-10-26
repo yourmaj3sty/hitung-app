@@ -5,6 +5,7 @@ import 'package:lottie/lottie.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../core/animations/emil_spring_button.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/database/app_database.dart';
 import '../../../core/providers/database_provider.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
@@ -19,17 +20,21 @@ import 'widgets/numpad_widget.dart';
 class QuickEntrySheet extends ConsumerStatefulWidget {
   final String? initialType;
   final bool isSavingsMode;
+  /// Jika diisi, sheet berjalan dalam mode edit untuk transaksi ini.
+  final Transaction? editTransaction;
 
   const QuickEntrySheet({
     super.key,
     this.initialType,
     this.isSavingsMode = false,
+    this.editTransaction,
   });
 
   static Future<void> show(
     BuildContext context, {
     String? initialType,
     bool isSavingsMode = false,
+    Transaction? editTransaction,
   }) {
     return showModalBottomSheet(
       context: context,
@@ -38,6 +43,7 @@ class QuickEntrySheet extends ConsumerStatefulWidget {
       builder: (context) => QuickEntrySheet(
         initialType: initialType,
         isSavingsMode: isSavingsMode,
+        editTransaction: editTransaction,
       ),
     );
   }
@@ -47,7 +53,7 @@ class QuickEntrySheet extends ConsumerStatefulWidget {
 }
 
 class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet> {
-  final _noteController = TextEditingController();
+  late final _noteController = TextEditingController(text: widget.editTransaction?.note ?? '');
   bool _defaultsInitialized = false;
   bool _isSuccess = false;
 
@@ -81,7 +87,9 @@ class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet> {
       _defaultsInitialized = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        if (widget.isSavingsMode) {
+        if (widget.editTransaction != null) {
+          notifier.loadForEdit(widget.editTransaction!);
+        } else if (widget.isSavingsMode) {
           notifier.initSavingsMode(wallets);
         } else {
           notifier.initDefaults(
@@ -146,6 +154,14 @@ class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet> {
                 ),
               ),
             ] else ...[
+              if (state.isEditing)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    'Edit Transaksi',
+                    style: TextStyle(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w800),
+                  ),
+                ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 child: Container(
@@ -459,7 +475,9 @@ class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet> {
                                   child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                                 )
                               : Text(
-                                  widget.isSavingsMode
+                                  state.isEditing
+                                      ? 'Simpan Perubahan'
+                                      : widget.isSavingsMode
                                       ? 'Simpan ke Tabungan (✦)'
                                       : (state.type == 'EXPENSE'
                                           ? 'Simpan Pengeluaran'

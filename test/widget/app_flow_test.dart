@@ -130,6 +130,27 @@ void main() {
         wallet = (await db.getWalletById('primary_wallet').timeout(const Duration(seconds: 5)))!);
     expect(wallet.currentBalance, 105000);
 
+    // --- Edit: ketuk transaksi, tambah digit 0 (5.000 -> 50.000), simpan ---
+    await tester.pump(const Duration(seconds: 4)); // tunggu SnackBar hilang
+    await tester.tap(find.text('Gaji Utama').first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await settle();
+    expect(find.text('Edit Transaksi'), findsOneWidget);
+    await tester.tap(key('0'));
+    await tester.pump();
+    await tester.tap(find.text('Simpan Perubahan'));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.byType(QuickEntrySheet), findsNothing);
+    await tester.runAsync(() async => saved = await db.select(db.transactions).get());
+    expect(saved, hasLength(1));
+    expect(saved.single.amount, 50000);
+    await tester.runAsync(() async => wallet = (await db.getWalletById('primary_wallet'))!);
+    expect(wallet.currentBalance, 150000);
+
     // --- Pindah tab: semua layar tetap hidup (IndexedStack) ---
     await tester.tap(find.text('Anggaran'));
     await tester.pump(const Duration(milliseconds: 300));
