@@ -237,6 +237,10 @@ class DailyTransactionGroupWidget extends StatelessWidget {
                         ),
                       ),
                     ],
+                    if (tx.receiptPath != null && tx.receiptPath!.isNotEmpty) ...[
+                      const SizedBox(width: 4),
+                      const Icon(LucideIcons.paperclip, size: 11, color: AppColors.gopayBlue),
+                    ],
                   ],
                 ),
               ],

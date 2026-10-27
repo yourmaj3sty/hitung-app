@@ -48,11 +48,42 @@ class BudgetingScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         children: [
-          // Month Label
-          Center(
-            child: Text(
-              'Periode: ${DateFormatter.formatMonthYear(selectedDate)}',
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500),
+          // Month Selector Row (Bulan ini, bulan lalu, dsb)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton(
+                  icon: const Icon(LucideIcons.chevronLeft, size: 18, color: AppColors.textPrimary),
+                  onPressed: () {
+                    ref.read(selectedDateFilterProvider.notifier).state = DateTime(
+                      selectedDate.year,
+                      selectedDate.month - 1,
+                      1,
+                    );
+                  },
+                ),
+                Text(
+                  'Periode Anggaran: ${DateFormatter.formatMonthYear(selectedDate)}',
+                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w700),
+                ),
+                IconButton(
+                  icon: const Icon(LucideIcons.chevronRight, size: 18, color: AppColors.textPrimary),
+                  onPressed: () {
+                    ref.read(selectedDateFilterProvider.notifier).state = DateTime(
+                      selectedDate.year,
+                      selectedDate.month + 1,
+                      1,
+                    );
+                  },
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 12),

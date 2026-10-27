@@ -1,12 +1,15 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:lottie/lottie.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../core/animations/emil_spring_button.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/providers/database_provider.dart';
+import '../../../core/services/receipt_storage_service.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../../shared/widgets/categorized_wallet_picker.dart';
@@ -61,6 +64,59 @@ class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet> {
   void dispose() {
     _noteController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickReceipt(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: source, imageQuality: 80);
+      if (picked != null) {
+        final savedPath = await ReceiptStorageService().saveReceipt(picked.path);
+        ref.read(quickEntryProvider.notifier).setReceiptPath(savedPath);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal mengambil foto: $e')),
+        );
+      }
+    }
+  }
+
+  void _showReceiptOptions(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(LucideIcons.camera, color: AppColors.gopayBlue),
+                title: const Text('Ambil Foto Kamera', style: TextStyle(fontWeight: FontWeight.w600)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickReceipt(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: const Icon(LucideIcons.image, color: AppColors.gojekGreen),
+                title: const Text('Pilih dari Galeri', style: TextStyle(fontWeight: FontWeight.w600)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickReceipt(ImageSource.gallery);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -379,6 +435,87 @@ class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet> {
                         ),
                       ],
                     ),
+
+                    const SizedBox(height: 10),
+
+                    // 3. Lampiran Foto Struk (Feature 10)
+                    if (state.receiptPath != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceElevated,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.file(
+                                File(state.receiptPath!),
+                                width: 44,
+                                height: 44,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  width: 44,
+                                  height: 44,
+                                  color: AppColors.border,
+                                  child: const Icon(LucideIcons.fileWarning, size: 20, color: AppColors.textMuted),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Foto Struk Terlampir',
+                                    style: TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w700),
+                                  ),
+                                  SizedBox(height: 2),
+                                  Text(
+                                    'Tersimpan aman di penyimpanan lokal',
+                                    style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(LucideIcons.trash2, size: 18, color: AppColors.coralRed),
+                              onPressed: () {
+                                notifier.setReceiptPath(null);
+                              },
+                              tooltip: 'Hapus Struk',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ] else ...[
+                      InkWell(
+                        onTap: () => _showReceiptOptions(context),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceElevated,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(LucideIcons.camera, size: 16, color: AppColors.textSecondary),
+                              SizedBox(width: 8),
+                              Text(
+                                '+ Lampirkan Foto Struk (Opsional)',
+                                style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

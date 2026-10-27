@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/error_codes.dart' as auth_error;
@@ -21,12 +22,35 @@ final isBiometricSupportedProvider = FutureProvider<bool>((ref) async {
   }
 });
 
+final themeModeProvider = StateProvider<ThemeMode>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  final val = prefs.getString(AppConstants.prefThemeMode);
+  switch (val) {
+    case 'dark':
+      return ThemeMode.dark;
+    case 'light':
+      return ThemeMode.light;
+    default:
+      return ThemeMode.system;
+  }
+});
+
 final isBiometricEnabledProvider = StateProvider<bool>((ref) {
   final prefs = ref.watch(sharedPreferencesProvider);
   return prefs.getBool(AppConstants.prefBiometricEnabled) ?? false;
 });
 
-// App lock state (true when biometric is enabled and user is locked out)
+final isPinEnabledProvider = StateProvider<bool>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return prefs.getBool(AppConstants.prefPinEnabled) ?? false;
+});
+
+final isPrivacyScreenEnabledProvider = StateProvider<bool>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return prefs.getBool(AppConstants.prefPrivacyScreenEnabled) ?? true;
+});
+
+// App lock state (true when biometric or PIN is enabled and user is locked out)
 final isAppLockedProvider = StateProvider<bool>((ref) => false);
 
 // Flag to prevent Android system biometric dialog from triggering lifecycle relock
@@ -36,6 +60,43 @@ class SettingsController extends StateNotifier<AsyncValue<void>> {
   final Ref _ref;
 
   SettingsController(this._ref) : super(const AsyncValue.data(null));
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    final prefs = _ref.read(sharedPreferencesProvider);
+    final strVal = mode == ThemeMode.dark ? 'dark' : (mode == ThemeMode.light ? 'light' : 'system');
+    await prefs.setString(AppConstants.prefThemeMode, strVal);
+    _ref.read(themeModeProvider.notifier).state = mode;
+  }
+
+  Future<void> togglePrivacyScreen(bool enabled) async {
+    final prefs = _ref.read(sharedPreferencesProvider);
+    await prefs.setBool(AppConstants.prefPrivacyScreenEnabled, enabled);
+    _ref.read(isPrivacyScreenEnabledProvider.notifier).state = enabled;
+  }
+
+  Future<void> setAppPin(String pin) async {
+    final prefs = _ref.read(sharedPreferencesProvider);
+    await prefs.setString(AppConstants.prefAppPin, pin);
+    await prefs.setBool(AppConstants.prefPinEnabled, true);
+    _ref.read(isPinEnabledProvider.notifier).state = true;
+  }
+
+  Future<void> removeAppPin() async {
+    final prefs = _ref.read(sharedPreferencesProvider);
+    await prefs.remove(AppConstants.prefAppPin);
+    await prefs.setBool(AppConstants.prefPinEnabled, false);
+    _ref.read(isPinEnabledProvider.notifier).state = false;
+  }
+
+  bool verifyAppPin(String enteredPin) {
+    final prefs = _ref.read(sharedPreferencesProvider);
+    final savedPin = prefs.getString(AppConstants.prefAppPin);
+    if (savedPin != null && savedPin == enteredPin) {
+      _ref.read(isAppLockedProvider.notifier).state = false;
+      return true;
+    }
+    return false;
+  }
 
   Future<bool> toggleBiometric(bool enabled) async {
     final auth = _ref.read(localAuthProvider);

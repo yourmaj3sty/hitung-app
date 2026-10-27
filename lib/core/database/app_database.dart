@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:uuid/uuid.dart';
 import '../constants/app_constants.dart';
 import '../utils/color_utils.dart';
 import 'data_exceptions.dart';
@@ -56,6 +57,25 @@ class Transactions extends Table {
   TextColumn get note => text().nullable()();
   DateTimeColumn get transactionDate => dateTime()();
   DateTimeColumn get createdAt => dateTime()();
+  TextColumn get receiptPath => text().nullable()(); // Lampiran foto struk lokal (Feature 10)
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+class RecurringTransactions extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text().withLength(min: 1, max: 100)();
+  IntColumn get amount => integer()();
+  TextColumn get type => text()(); // 'EXPENSE', 'INCOME', 'TRANSFER'
+  TextColumn get walletId => text().references(Wallets, #id)();
+  TextColumn get toWalletId => text().nullable().references(Wallets, #id)();
+  TextColumn get categoryId => text().nullable().references(Categories, #id)();
+  TextColumn get frequency => text()(); // 'DAILY', 'WEEKLY', 'MONTHLY'
+  DateTimeColumn get nextDueDate => dateTime()();
+  DateTimeColumn get lastGeneratedDate => dateTime().nullable()();
+  BoolColumn get isActive => boolean().withDefault(const Constant(true))();
+  DateTimeColumn get createdAt => dateTime()();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -81,15 +101,16 @@ class DbEnums {
   static const transactionTypes = {'EXPENSE', 'INCOME', 'TRANSFER'};
   static const categoryTypes = {'EXPENSE', 'INCOME'};
   static const walletTypes = {'BANK', 'E_WALLET', 'SAVINGS', 'CASH'};
+  static const recurringFrequencies = {'DAILY', 'WEEKLY', 'MONTHLY'};
   static const nameMaxLength = AppConstants.maxNameLength;
 }
 
-@DriftDatabase(tables: [Wallets, Categories, Transactions])
+@DriftDatabase(tables: [Wallets, Categories, Transactions, RecurringTransactions])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? e]) : super(e ?? _openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -102,6 +123,11 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(wallets, wallets.walletType);
             await m.addColumn(wallets, wallets.institutionCode);
             await m.addColumn(wallets, wallets.targetAmount);
+          }
+          if (from < 3) {
+            // Migrasi aman v2 -> v3: tambah kolom receiptPath & tabel recurringTransactions
+            await m.addColumn(transactions, transactions.receiptPath);
+            await m.createTable(recurringTransactions);
           }
         },
         beforeOpen: (details) async {
@@ -157,6 +183,67 @@ class AppDatabase extends _$AppDatabase {
     return (update(wallets)..where((tbl) => tbl.id.equals(id))).write(
       const WalletsCompanion(isArchived: Value(true)),
     );
+  }
+
+  // Pulihkan dompet yang diarsipkan (Feature 3)
+  Future<int> unarchiveWallet(String id) {
+    return (update(wallets)..where((tbl) => tbl.id.equals(id))).write(
+      const WalletsCompanion(isArchived: Value(false)),
+    );
+  }
+
+  Stream<List<Wallet>> watchArchivedWallets() {
+    return (select(wallets)
+          ..where((tbl) => tbl.isArchived.equals(true))
+          ..orderBy([(tbl) => OrderingTerm.asc(tbl.createdAt)]))
+        .watch();
+  }
+
+  Future<List<Wallet>> getArchivedWallets() {
+    return (select(wallets)
+          ..where((tbl) => tbl.isArchived.equals(true))
+          ..orderBy([(tbl) => OrderingTerm.asc(tbl.createdAt)]))
+        .get();
+  }
+
+  /// Penyesuaian saldo secara atomik: mengoreksi selisih dengan saldo bank/rekening asli (Feature 3).
+  /// Menghitung selisih (delta = actual - current) dan membuat transaksi pencatatan audit.
+  Future<void> adjustWalletBalance({
+    required String walletId,
+    required int actualBalance,
+    String? note,
+  }) {
+    return transaction(() async {
+      final wallet = await getWalletById(walletId);
+      if (wallet == null) throw const DataValidationException('Dompet tidak ditemukan.');
+
+      final delta = actualBalance - wallet.currentBalance;
+      if (delta == 0) return; // Tidak ada selisih yang perlu disesuaikan
+
+      final isPositive = delta > 0;
+      final txType = isPositive ? 'INCOME' : 'EXPENSE';
+      final txAmount = delta.abs();
+
+      final tx = TransactionsCompanion(
+        id: Value('adj_${const Uuid().v4()}'),
+        walletId: Value(walletId),
+        toWalletId: const Value(null),
+        categoryId: const Value(null),
+        amount: Value(txAmount),
+        type: Value(txType),
+        note: Value(note ?? 'Penyesuaian Saldo (${isPositive ? '+' : '-'}$txAmount)'),
+        transactionDate: Value(DateTime.now()),
+        createdAt: Value(DateTime.now()),
+      );
+
+      await into(transactions).insert(tx);
+      await customUpdate(
+        'UPDATE wallets SET current_balance = ? WHERE id = ?',
+        variables: [Variable.withInt(actualBalance), Variable.withString(walletId)],
+        updates: {wallets},
+        updateKind: UpdateKind.update,
+      );
+    });
   }
 
   // --- CATEGORY QUERIES ---
@@ -330,8 +417,40 @@ class AppDatabase extends _$AppDatabase {
       type: Value(tx.type),
       note: Value(tx.note),
       transactionDate: Value(tx.transactionDate),
+      receiptPath: Value(tx.receiptPath),
       createdAt: Value(tx.createdAt),
     ));
+  }
+
+  Future<int> getMonthlyExpenseForCategory(String categoryId, DateTime date) async {
+    final start = DateTime(date.year, date.month, 1);
+    final endExclusive = DateTime(date.year, date.month + 1, 1);
+    final sumCol = transactions.amount.sum();
+    final query = selectOnly(transactions)
+      ..addColumns([sumCol])
+      ..where(
+        transactions.type.equals('EXPENSE') &
+        transactions.categoryId.equals(categoryId) &
+        transactions.transactionDate.isBiggerOrEqualValue(start) &
+        transactions.transactionDate.isSmallerThanValue(endExclusive),
+      );
+    final result = await query.getSingleOrNull();
+    return result?.read(sumCol) ?? 0;
+  }
+
+  Future<int> getMonthlyTotalExpense(DateTime date) async {
+    final start = DateTime(date.year, date.month, 1);
+    final endExclusive = DateTime(date.year, date.month + 1, 1);
+    final sumCol = transactions.amount.sum();
+    final query = selectOnly(transactions)
+      ..addColumns([sumCol])
+      ..where(
+        transactions.type.equals('EXPENSE') &
+        transactions.transactionDate.isBiggerOrEqualValue(start) &
+        transactions.transactionDate.isSmallerThanValue(endExclusive),
+      );
+    final result = await query.getSingleOrNull();
+    return result?.read(sumCol) ?? 0;
   }
 
   // --- REACTIVE DASHBOARD TRANSACTIONS STREAM ---
@@ -383,6 +502,149 @@ class AppDatabase extends _$AppDatabase {
               t.transactionDate.isBiggerOrEqualValue(start) &
               t.transactionDate.isSmallerThanValue(endExclusive)))
         .watch();
+  }
+
+  /// Mencari transaksi berdasarkan kata kunci (catatan, nama kategori, nama dompet)
+  /// dan filter opsional (tipe, kategori, dompet, rentang tanggal) (Feature 4).
+  Stream<List<TransactionItem>> watchFilteredTransactions({
+    String? queryText,
+    String? type,
+    String? walletId,
+    String? categoryId,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) {
+    final toWallets = alias(wallets, 'to_wallet');
+    final query = select(transactions).join([
+      innerJoin(wallets, wallets.id.equalsExp(transactions.walletId)),
+      leftOuterJoin(toWallets, toWallets.id.equalsExp(transactions.toWalletId)),
+      leftOuterJoin(categories, categories.id.equalsExp(transactions.categoryId)),
+    ]);
+
+    if (startDate != null) {
+      query.where(transactions.transactionDate.isBiggerOrEqualValue(startDate));
+    }
+    if (endDate != null) {
+      query.where(transactions.transactionDate.isSmallerOrEqualValue(endDate));
+    }
+    if (type != null && type.isNotEmpty && type != 'ALL') {
+      query.where(transactions.type.equals(type));
+    }
+    if (walletId != null && walletId.isNotEmpty) {
+      query.where(transactions.walletId.equals(walletId) | transactions.toWalletId.equals(walletId));
+    }
+    if (categoryId != null && categoryId.isNotEmpty) {
+      query.where(transactions.categoryId.equals(categoryId));
+    }
+    if (queryText != null && queryText.trim().isNotEmpty) {
+      final q = '%${queryText.trim().toLowerCase()}%';
+      query.where(
+        transactions.note.lower().like(q) |
+        categories.name.lower().like(q) |
+        wallets.name.lower().like(q),
+      );
+    }
+
+    query.orderBy([
+      OrderingTerm.desc(transactions.transactionDate),
+      OrderingTerm.desc(transactions.createdAt),
+    ]);
+
+    return query.watch().map((rows) => [
+          for (final row in rows)
+            TransactionItem(
+              transaction: row.readTable(transactions),
+              wallet: row.readTable(wallets),
+              toWallet: row.readTableOrNull(toWallets),
+              category: row.readTableOrNull(categories),
+            ),
+        ]);
+  }
+
+  // --- RECURRING TRANSACTIONS QUERIES (Feature 6) ---
+
+  Stream<List<RecurringTransaction>> watchRecurringTransactions() {
+    return (select(recurringTransactions)
+          ..orderBy([(tbl) => OrderingTerm.asc(tbl.nextDueDate)]))
+        .watch();
+  }
+
+  Future<List<RecurringTransaction>> getActiveRecurringTransactions() {
+    return (select(recurringTransactions)
+          ..where((t) => t.isActive.equals(true))
+          ..orderBy([(tbl) => OrderingTerm.asc(tbl.nextDueDate)]))
+        .get();
+  }
+
+  Future<int> insertRecurringTransaction(RecurringTransactionsCompanion rec) {
+    return into(recurringTransactions).insert(rec);
+  }
+
+  Future<bool> updateRecurringTransaction(RecurringTransactionsCompanion rec) {
+    return update(recurringTransactions).replace(rec);
+  }
+
+  Future<int> deleteRecurringTransaction(String id) {
+    return (delete(recurringTransactions)..where((t) => t.id.equals(id))).go();
+  }
+
+  Future<int> toggleRecurringActive(String id, bool isActive) {
+    return (update(recurringTransactions)..where((t) => t.id.equals(id))).write(
+      RecurringTransactionsCompanion(isActive: Value(isActive)),
+    );
+  }
+
+  /// Memproses transaksi berulang yang jatuh tempo secara otomatis (Feature 6).
+  Future<int> processDueRecurringTransactions() {
+    return transaction(() async {
+      final now = DateTime.now();
+      final dueItems = await (select(recurringTransactions)
+            ..where((t) => t.isActive.equals(true) & t.nextDueDate.isSmallerOrEqualValue(now)))
+          .get();
+
+      int count = 0;
+      for (final item in dueItems) {
+        await createTransaction(TransactionsCompanion(
+          id: Value('rec_tx_${const Uuid().v4()}'),
+          walletId: Value(item.walletId),
+          toWalletId: Value(item.toWalletId),
+          categoryId: Value(item.categoryId),
+          amount: Value(item.amount),
+          type: Value(item.type),
+          note: Value('${item.name} (Otomatis: ${item.frequency.toLowerCase()})'),
+          transactionDate: Value(item.nextDueDate),
+          createdAt: Value(now),
+        ));
+
+        DateTime nextDate;
+        if (item.frequency == 'DAILY') {
+          nextDate = item.nextDueDate.add(const Duration(days: 1));
+        } else if (item.frequency == 'WEEKLY') {
+          nextDate = item.nextDueDate.add(const Duration(days: 7));
+        } else {
+          // MONTHLY
+          final current = item.nextDueDate;
+          int nextMonth = current.month + 1;
+          int nextYear = current.year;
+          if (nextMonth > 12) {
+            nextMonth = 1;
+            nextYear++;
+          }
+          final daysInNextMonth = DateTime(nextYear, nextMonth + 1, 0).day;
+          final targetDay = current.day > daysInNextMonth ? daysInNextMonth : current.day;
+          nextDate = DateTime(nextYear, nextMonth, targetDay, current.hour, current.minute);
+        }
+
+        await (update(recurringTransactions)..where((t) => t.id.equals(item.id))).write(
+          RecurringTransactionsCompanion(
+            nextDueDate: Value(nextDate),
+            lastGeneratedDate: Value(now),
+          ),
+        );
+        count++;
+      }
+      return count;
+    });
   }
 
   // --- SEEDING & ONBOARDING HELPER (FR-01 & v2.0) ---
@@ -499,6 +761,7 @@ class AppDatabase extends _$AppDatabase {
                 'note': t.note,
                 'transactionDate': t.transactionDate.toIso8601String(),
                 'createdAt': t.createdAt.toIso8601String(),
+                'receiptPath': t.receiptPath,
               })
           .toList(),
     };
@@ -634,6 +897,7 @@ class BackupParser {
         note: Value(_string(t, 'note', ctx)),
         transactionDate: Value(_date(t, 'transactionDate', ctx)),
         createdAt: Value(_date(t, 'createdAt', ctx)),
+        receiptPath: Value(_string(t, 'receiptPath', ctx)),
       ));
     }
 

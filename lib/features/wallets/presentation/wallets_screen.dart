@@ -17,6 +17,7 @@ import '../../dashboard/providers/dashboard_provider.dart';
 import '../providers/wallet_provider.dart';
 import 'wallet_form_sheet.dart';
 import '../../../core/utils/color_utils.dart';
+import '../../../core/utils/rupiah_input_formatter.dart';
 
 class WalletsScreen extends ConsumerWidget {
   const WalletsScreen({super.key});
@@ -282,6 +283,37 @@ class WalletsScreen extends ConsumerWidget {
               const SizedBox(height: 10),
 
               ...dailyWallets.map((wallet) => _buildDailyWalletCard(context, ref, wallet)),
+
+              // Dompet Diarsipkan (Feature 3)
+              Builder(
+                builder: (context) {
+                  final archivedWallets = ref.watch(archivedWalletsStreamProvider).value ?? [];
+                  if (archivedWallets.isEmpty) return const SizedBox.shrink();
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          const Icon(LucideIcons.archive, color: AppColors.textSecondary, size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Dompet Diarsipkan (${archivedWallets.length})',
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      ...archivedWallets.map((w) => _buildArchivedWalletCard(context, ref, w)),
+                    ],
+                  );
+                },
+              ),
               const SizedBox(height: 40),
             ],
           );
@@ -363,6 +395,8 @@ class WalletsScreen extends ConsumerWidget {
                 onSelected: (action) {
                   if (action == 'edit') {
                     WalletFormSheet.show(context, walletToEdit: wallet);
+                  } else if (action == 'adjust') {
+                    _showAdjustBalanceDialog(context, ref, wallet);
                   } else if (action == 'archive') {
                     _confirmArchive(context, ref, wallet);
                   }
@@ -375,6 +409,16 @@ class WalletsScreen extends ConsumerWidget {
                         Icon(LucideIcons.edit2, size: 16, color: AppColors.textPrimary),
                         SizedBox(width: 10),
                         Text('Edit Tabungan'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'adjust',
+                    child: Row(
+                      children: [
+                        Icon(LucideIcons.slidersHorizontal, size: 16, color: AppColors.gopayBlue),
+                        SizedBox(width: 10),
+                        Text('Koreksi / Sesuaikan Saldo'),
                       ],
                     ),
                   ),
@@ -548,6 +592,8 @@ class WalletsScreen extends ConsumerWidget {
             onSelected: (action) {
               if (action == 'edit') {
                 WalletFormSheet.show(context, walletToEdit: wallet);
+              } else if (action == 'adjust') {
+                _showAdjustBalanceDialog(context, ref, wallet);
               } else if (action == 'archive') {
                 _confirmArchive(context, ref, wallet);
               }
@@ -560,6 +606,16 @@ class WalletsScreen extends ConsumerWidget {
                     Icon(LucideIcons.edit2, size: 16, color: AppColors.textPrimary),
                     SizedBox(width: 10),
                     Text('Edit Dompet'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'adjust',
+                child: Row(
+                  children: [
+                    Icon(LucideIcons.slidersHorizontal, size: 16, color: AppColors.gopayBlue),
+                    SizedBox(width: 10),
+                    Text('Koreksi / Sesuaikan Saldo'),
                   ],
                 ),
               ),
@@ -684,6 +740,186 @@ class WalletsScreen extends ConsumerWidget {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             child: const Text('Arsipkan'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAdjustBalanceDialog(BuildContext context, WidgetRef ref, Wallet wallet) {
+    final balanceController = TextEditingController(
+      text: CurrencyFormatter.formatRupiah(wallet.currentBalance).replaceAll('Rp ', ''),
+    );
+    final noteController = TextEditingController();
+    int current = wallet.currentBalance;
+    int entered = current;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) {
+          final delta = entered - current;
+          final isPositive = delta > 0;
+          final isZero = delta == 0;
+
+          return AlertDialog(
+            title: Text('Sesuaikan Saldo: ${wallet.name}'),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Saldo di Aplikasi saat ini:', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  const SizedBox(height: 2),
+                  Text(CurrencyFormatter.formatRupiah(current), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                  const SizedBox(height: 16),
+                  const Text('Saldo Asli / Rekening:', style: TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: balanceController,
+                    keyboardType: TextInputType.number,
+                    autofocus: true,
+                    inputFormatters: const [RupiahInputFormatter()],
+                    onChanged: (val) {
+                      setState(() {
+                        entered = CurrencyFormatter.parse(val);
+                      });
+                    },
+                    decoration: const InputDecoration(
+                      prefixText: 'Rp ',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isZero
+                          ? AppColors.surfaceElevated
+                          : (isPositive ? AppColors.gojekGreen.withOpacity(0.12) : AppColors.coralRed.withOpacity(0.12)),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          isZero ? LucideIcons.check : (isPositive ? LucideIcons.arrowUpRight : LucideIcons.arrowDownLeft),
+                          size: 16,
+                          color: isZero ? AppColors.textSecondary : (isPositive ? AppColors.gojekGreen : AppColors.coralRed),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            isZero
+                                ? 'Saldo sudah cocok'
+                                : 'Selisih koreksi: ${isPositive ? '+' : '-'}${CurrencyFormatter.formatRupiah(delta.abs())}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: isZero ? AppColors.textSecondary : (isPositive ? AppColors.gojekGreen : AppColors.coralRed),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: noteController,
+                    decoration: const InputDecoration(
+                      labelText: 'Catatan Koreksi (opsional)',
+                      hintText: 'misal: Bunga bank, biaya admin',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Batal', style: TextStyle(color: AppColors.textSecondary)),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.of(ctx).pop();
+                  final note = noteController.text.trim();
+                  final ok = await ref.read(walletControllerProvider.notifier).adjustBalance(
+                    walletId: wallet.id,
+                    actualBalance: entered,
+                    note: note.isEmpty ? null : note,
+                  );
+                  if (ok && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Saldo ${wallet.name} disesuaikan ke ${CurrencyFormatter.formatRupiah(entered)}.')),
+                    );
+                  }
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.gopayBlue, foregroundColor: Colors.white),
+                child: const Text('Terapkan Koreksi'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildArchivedWalletCard(BuildContext context, WidgetRef ref, Wallet wallet) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: Colors.grey.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(IconHelper.getIcon(wallet.iconName), color: Colors.grey, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(wallet.name, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                Text('Saldo: ${CurrencyFormatter.formatRupiah(wallet.currentBalance)}',
+                    style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
+              ],
+            ),
+          ),
+          EmilSpringButton(
+            onTap: () async {
+              final ok = await ref.read(walletControllerProvider.notifier).unarchiveWallet(wallet.id);
+              if (ok && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Dompet "${wallet.name}" berhasil dipulihkan!')),
+                );
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.gojekGreen.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(LucideIcons.rotateCcw, size: 14, color: AppColors.gojekGreen),
+                  SizedBox(width: 4),
+                  Text('Pulihkan', style: TextStyle(color: AppColors.gojekGreen, fontSize: 12, fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
           ),
         ],
       ),

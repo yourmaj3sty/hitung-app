@@ -101,7 +101,7 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
                       style: const TextStyle(color: AppColors.coralRed, fontSize: 13, fontWeight: FontWeight.w600),
                     ),
                   ],
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 36),
                   SizedBox(
                     width: double.infinity,
                     height: 52,
@@ -122,12 +122,85 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  // Opsi Buka dengan PIN Cadangan (Feature 9)
+                  TextButton.icon(
+                    onPressed: () => _showPinEntryDialog(context),
+                    icon: const Icon(LucideIcons.keyRound, size: 16, color: AppColors.gopayBlue),
+                    label: const Text(
+                      'Buka dengan PIN Aplikasi',
+                      style: TextStyle(
+                        color: AppColors.gopayBlue,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  void _showPinEntryDialog(BuildContext context) {
+    final pinController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        String? errText;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: AppColors.surface,
+              title: const Text('Masukkan PIN Aplikasi', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Gunakan PIN keamanan yang telah Anda atur sebelumnya.',
+                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: pinController,
+                    keyboardType: TextInputType.number,
+                    obscureText: true,
+                    maxLength: 6,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 22, letterSpacing: 8, fontWeight: FontWeight.w800),
+                    decoration: InputDecoration(
+                      hintText: '••••',
+                      errorText: errText,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+                ElevatedButton(
+                  onPressed: () {
+                    final pin = pinController.text.trim();
+                    final success = ref.read(settingsControllerProvider.notifier).verifyAppPin(pin);
+                    if (success) {
+                      Navigator.pop(ctx);
+                    } else {
+                      setDialogState(() {
+                        errText = 'PIN salah. Silakan coba lagi.';
+                      });
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.gopayBlue),
+                  child: const Text('Buka', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

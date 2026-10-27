@@ -27,6 +27,22 @@ const uncategorizedExpenseCategory = Category(
   isDeleted: false,
 );
 
+/// Kategori pengganti untuk pemasukan tanpa kategori.
+const uncategorizedIncomeCategory = Category(
+  id: '__uncategorized_income__',
+  name: 'Tanpa Kategori',
+  type: 'INCOME',
+  iconName: 'wallet',
+  colorHex: '#10B981',
+  isDeleted: false,
+);
+
+/// Tipe analitik aktif: 'EXPENSE' (Pengeluaran) atau 'INCOME' (Pemasukan) (Feature 8)
+final analyticsTypeProvider = StateProvider<String>((ref) => 'EXPENSE');
+
+/// Periode tren: 6 bulan atau 12 bulan
+final trendPeriodMonthsProvider = StateProvider<int>((ref) => 6);
+
 /// Membagi 100% ke tiap nilai dengan metode sisa terbesar (largest remainder),
 /// sehingga persentase bulat selalu berjumlah tepat 100.
 List<int> distributePercentages(List<int> amounts) {
@@ -50,18 +66,18 @@ List<int> distributePercentages(List<int> amounts) {
   return floors;
 }
 
-/// Rincian pengeluaran per kategori bulan terpilih (semua dompet).
-/// Kategori yang sudah dihapus tetap dihitung agar total dan persentase tetap benar.
-final categoryAnalyticsListProvider = Provider<List<CategoryAnalyticsItem>>((ref) {
-  final txs = ref.watch(monthTransactionsAllWalletsProvider).value ?? const <TransactionItem>[];
-
+List<CategoryAnalyticsItem> _calculateCategoryAnalytics(List<TransactionItem> txs, String targetType) {
   final Map<String, Category> categoriesById = {};
   final Map<String, int> amounts = {};
   final Map<String, int> counts = {};
 
+  final defaultCat = targetType == 'EXPENSE'
+      ? uncategorizedExpenseCategory
+      : uncategorizedIncomeCategory;
+
   for (final item in txs) {
-    if (item.transaction.type != 'EXPENSE') continue;
-    final cat = item.category ?? uncategorizedExpenseCategory;
+    if (item.transaction.type != targetType) continue;
+    final cat = item.category ?? defaultCat;
     categoriesById[cat.id] = cat;
     amounts[cat.id] = (amounts[cat.id] ?? 0) + item.transaction.amount;
     counts[cat.id] = (counts[cat.id] ?? 0) + 1;
@@ -79,6 +95,26 @@ final categoryAnalyticsListProvider = Provider<List<CategoryAnalyticsItem>>((ref
         percentage: percentages[i],
       ),
   ];
+}
+
+/// Rincian pengeluaran per kategori bulan terpilih (semua dompet).
+final expenseAnalyticsListProvider = Provider<List<CategoryAnalyticsItem>>((ref) {
+  final txs = ref.watch(monthTransactionsAllWalletsProvider).value ?? const <TransactionItem>[];
+  return _calculateCategoryAnalytics(txs, 'EXPENSE');
+});
+
+/// Rincian pemasukan per kategori bulan terpilih (semua dompet).
+final incomeAnalyticsListProvider = Provider<List<CategoryAnalyticsItem>>((ref) {
+  final txs = ref.watch(monthTransactionsAllWalletsProvider).value ?? const <TransactionItem>[];
+  return _calculateCategoryAnalytics(txs, 'INCOME');
+});
+
+/// Rincian kategori aktif berdasarkan tipe tab yang dipilih ('EXPENSE' atau 'INCOME').
+final categoryAnalyticsListProvider = Provider<List<CategoryAnalyticsItem>>((ref) {
+  final type = ref.watch(analyticsTypeProvider);
+  return type == 'EXPENSE'
+      ? ref.watch(expenseAnalyticsListProvider)
+      : ref.watch(incomeAnalyticsListProvider);
 });
 
 // Month-over-month comparison provider
@@ -100,7 +136,6 @@ class MonthComparison {
 }
 
 /// Perbandingan pengeluaran bulan ini vs bulan lalu (semua dompet).
-/// Berbasis stream, jadi langsung ter-update saat transaksi ditambah/dihapus.
 final monthComparisonProvider = StreamProvider<MonthComparison>((ref) {
   final db = ref.watch(databaseProvider);
   final selected = ref.watch(selectedDateFilterProvider);
@@ -119,6 +154,69 @@ final monthComparisonProvider = StreamProvider<MonthComparison>((ref) {
       }
     }
     return MonthComparison(currentMonthExpense: cur, previousMonthExpense: prev);
+  });
+});
+
+// Data tren bulanan (Feature 8)
+class MonthlyTrendPoint {
+  final DateTime month;
+  final int totalIncome;
+  final int totalExpense;
+
+  MonthlyTrendPoint({
+    required this.month,
+    required this.totalIncome,
+    required this.totalExpense,
+  });
+
+  int get netSavings => totalIncome - totalExpense;
+}
+
+final monthlyTrendProvider = StreamProvider<List<MonthlyTrendPoint>>((ref) {
+  final db = ref.watch(databaseProvider);
+  final monthsCount = ref.watch(trendPeriodMonthsProvider);
+  final now = DateTime.now();
+
+  // Hitung rentang dari N bulan lalu sampai akhir bulan ini
+  final start = DateTime(now.year, now.month - (monthsCount - 1), 1);
+  final endExclusive = DateTime(now.year, now.month + 1, 1);
+
+  return db.watchTransactions(startDate: start, endDateExclusive: endExclusive).map((txs) {
+    final Map<String, ({int income, int expense})> monthTotals = {};
+
+    // Inisialisasi setiap bulan dalam urutan kronologis
+    final points = <MonthlyTrendPoint>[];
+    for (var i = monthsCount - 1; i >= 0; i--) {
+      final m = DateTime(now.year, now.month - i, 1);
+      final key = '${m.year}-${m.month.toString().padLeft(2, '0')}';
+      monthTotals[key] = (income: 0, expense: 0);
+    }
+
+    for (final item in txs) {
+      final tx = item.transaction;
+      final key = '${tx.transactionDate.year}-${tx.transactionDate.month.toString().padLeft(2, '0')}';
+      if (monthTotals.containsKey(key)) {
+        final current = monthTotals[key]!;
+        if (tx.type == 'INCOME') {
+          monthTotals[key] = (income: current.income + tx.amount, expense: current.expense);
+        } else if (tx.type == 'EXPENSE') {
+          monthTotals[key] = (income: current.income, expense: current.expense + tx.amount);
+        }
+      }
+    }
+
+    for (var i = monthsCount - 1; i >= 0; i--) {
+      final m = DateTime(now.year, now.month - i, 1);
+      final key = '${m.year}-${m.month.toString().padLeft(2, '0')}';
+      final total = monthTotals[key] ?? (income: 0, expense: 0);
+      points.add(MonthlyTrendPoint(
+        month: m,
+        totalIncome: total.income,
+        totalExpense: total.expense,
+      ));
+    }
+
+    return points;
   });
 });
 

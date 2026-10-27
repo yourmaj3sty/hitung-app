@@ -99,10 +99,51 @@ class WalletController extends StateNotifier<AsyncValue<void>> {
       return false;
     }
   }
+
+  // Pulihkan dompet (Feature 3)
+  Future<bool> unarchiveWallet(String id) async {
+    state = const AsyncValue.loading();
+    try {
+      final db = _ref.read(databaseProvider);
+      await db.unarchiveWallet(id);
+      state = const AsyncValue.data(null);
+      return true;
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+      return false;
+    }
+  }
+
+  // Penyesuaian / koreksi selisih saldo dengan rekening asli (Feature 3)
+  Future<bool> adjustBalance({
+    required String walletId,
+    required int actualBalance,
+    String? note,
+  }) async {
+    state = const AsyncValue.loading();
+    try {
+      final db = _ref.read(databaseProvider);
+      await db.adjustWalletBalance(
+        walletId: walletId,
+        actualBalance: actualBalance,
+        note: note,
+      );
+      state = const AsyncValue.data(null);
+      return true;
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+      return false;
+    }
+  }
 }
 
 final walletControllerProvider = StateNotifierProvider<WalletController, AsyncValue<void>>((ref) {
   return WalletController(ref);
+});
+
+final archivedWalletsStreamProvider = StreamProvider<List<Wallet>>((ref) {
+  final db = ref.watch(databaseProvider);
+  return db.watchArchivedWallets();
 });
 
 // Filter state provider for Home Hero Segmented Pill Switcher

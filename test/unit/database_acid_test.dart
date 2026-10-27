@@ -32,7 +32,7 @@ void main() {
       expect(wallets.first.currentBalance, 1000000);
       expect(wallets.first.walletType, 'E_WALLET');
       expect(wallets.first.institutionCode, 'GOPAY');
-      expect(db.schemaVersion, 2);
+      expect(db.schemaVersion, 3);
 
       final expenseCats = await db.getActiveCategories(type: 'EXPENSE');
       final incomeCats = await db.getActiveCategories(type: 'INCOME');

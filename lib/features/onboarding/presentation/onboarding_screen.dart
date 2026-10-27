@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/utils/rupiah_input_formatter.dart';
 import '../../../core/constants/institution_presets.dart';
+import '../../../core/providers/database_provider.dart';
+import '../../../core/utils/color_utils.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/icon_helper.dart';
+import '../../../core/utils/rupiah_input_formatter.dart';
 import '../../../core/widgets/hitung_logo_widget.dart';
+import '../../backup_restore/services/json_backup_service.dart';
 import '../providers/onboarding_provider.dart';
-import '../../../core/utils/color_utils.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -78,6 +81,67 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     if (!success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Terjadi kesalahan saat menyiapkan data awal.')),
+      );
+    }
+  }
+
+  Future<void> _restoreFromBackup() async {
+    HapticFeedback.lightImpact();
+    final db = ref.read(databaseProvider);
+    final backupService = JsonBackupService(db);
+
+    final result = await backupService.importJson(
+      onPasswordRequested: () async {
+        final passController = TextEditingController();
+        return showDialog<String>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Cadangan Terenkripsi'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('File cadangan ini dilindungi kata sandi. Masukkan sandi untuk membuka:'),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: passController,
+                  obscureText: true,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Kata Sandi',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, null),
+                child: const Text('Batal'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, passController.text.trim()),
+                child: const Text('Buka'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (result == null) return; // User cancelled
+
+    if (result == 'SUCCESS') {
+      final prefs = ref.read(sharedPreferencesProvider);
+      await prefs.setBool(AppConstants.prefIsOnboarded, true);
+      ref.read(isOnboardedProvider.notifier).state = true;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Data berhasil dipulihkan! Selamat datang kembali.')),
+        );
+      }
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result)),
       );
     }
   }
@@ -385,6 +449,19 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                             'Mulai Mencatat ✦',
                             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
                           ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextButton.icon(
+                  onPressed: isLoading ? null : _restoreFromBackup,
+                  icon: const Icon(LucideIcons.download, size: 16, color: AppColors.gopayBlue),
+                  label: const Text(
+                    'Sudah punya cadangan data? Pulihkan di sini',
+                    style: TextStyle(
+                      color: AppColors.gopayBlue,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],

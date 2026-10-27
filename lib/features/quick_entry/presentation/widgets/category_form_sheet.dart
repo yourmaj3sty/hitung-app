@@ -7,23 +7,32 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/providers/database_provider.dart';
-import '../../../../core/utils/icon_helper.dart';
 import '../../../../core/utils/color_utils.dart';
+import '../../../../core/utils/icon_helper.dart';
 
 class CategoryFormSheet extends ConsumerStatefulWidget {
   final String categoryType; // 'EXPENSE' or 'INCOME'
+  final Category? categoryToEdit;
 
   const CategoryFormSheet({
     super.key,
     this.categoryType = 'EXPENSE',
+    this.categoryToEdit,
   });
 
-  static Future<Category?> show(BuildContext context, {String categoryType = 'EXPENSE'}) {
+  static Future<Category?> show(
+    BuildContext context, {
+    String categoryType = 'EXPENSE',
+    Category? categoryToEdit,
+  }) {
     return showModalBottomSheet<Category>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => CategoryFormSheet(categoryType: categoryType),
+      builder: (context) => CategoryFormSheet(
+        categoryType: categoryToEdit?.type ?? categoryType,
+        categoryToEdit: categoryToEdit,
+      ),
     );
   }
 
@@ -32,11 +41,13 @@ class CategoryFormSheet extends ConsumerStatefulWidget {
 }
 
 class _CategoryFormSheetState extends ConsumerState<CategoryFormSheet> {
-  final _nameController = TextEditingController();
+  late final TextEditingController _nameController;
   String? _errorText;
   bool _isSaving = false;
-  String _selectedIcon = 'tag';
-  String _selectedColor = '#F04438';
+  late String _selectedIcon;
+  late String _selectedColor;
+
+  bool get _isEditing => widget.categoryToEdit != null;
 
   final List<String> _colors = [
     '#F04438', // Coral Red
@@ -62,13 +73,25 @@ class _CategoryFormSheetState extends ConsumerState<CategoryFormSheet> {
     'gift',
     'film',
     'laptop',
+    'banknote',
+    'briefcase',
+    'wallet',
+    'sparkles',
   ];
 
   @override
   void initState() {
     super.initState();
-    _selectedColor = widget.categoryType == 'EXPENSE' ? '#F04438' : '#00AA13';
-    _selectedIcon = widget.categoryType == 'EXPENSE' ? 'tag' : 'banknote';
+    final toEdit = widget.categoryToEdit;
+    if (toEdit != null) {
+      _nameController = TextEditingController(text: toEdit.name);
+      _selectedIcon = toEdit.iconName;
+      _selectedColor = toEdit.colorHex;
+    } else {
+      _nameController = TextEditingController();
+      _selectedColor = widget.categoryType == 'EXPENSE' ? '#F04438' : '#00AA13';
+      _selectedIcon = widget.categoryType == 'EXPENSE' ? 'tag' : 'banknote';
+    }
   }
 
   @override
@@ -91,22 +114,38 @@ class _CategoryFormSheetState extends ConsumerState<CategoryFormSheet> {
       _isSaving = true;
     });
     final db = ref.read(databaseProvider);
-    // UUID penuh agar tidak ada risiko tabrakan ID.
-    final id = 'cat_custom_${const Uuid().v4()}';
 
     try {
-      await db.insertCategory(
-        CategoriesCompanion(
-          id: drift.Value(id),
-          name: drift.Value(name),
-          type: drift.Value(widget.categoryType),
-          iconName: drift.Value(_selectedIcon),
-          colorHex: drift.Value(_selectedColor),
-          isDeleted: const drift.Value(false),
-        ),
-      );
-      final newCat = await db.getCategoryById(id);
-      if (mounted) Navigator.of(context).pop(newCat);
+      if (_isEditing) {
+        final toEdit = widget.categoryToEdit!;
+        await db.updateCategory(
+          CategoriesCompanion(
+            id: drift.Value(toEdit.id),
+            name: drift.Value(name),
+            type: drift.Value(toEdit.type),
+            iconName: drift.Value(_selectedIcon),
+            colorHex: drift.Value(_selectedColor),
+            monthlyBudget: drift.Value(toEdit.monthlyBudget),
+            isDeleted: drift.Value(toEdit.isDeleted),
+          ),
+        );
+        final updated = await db.getCategoryById(toEdit.id);
+        if (mounted) Navigator.of(context).pop(updated);
+      } else {
+        final id = 'cat_custom_${const Uuid().v4()}';
+        await db.insertCategory(
+          CategoriesCompanion(
+            id: drift.Value(id),
+            name: drift.Value(name),
+            type: drift.Value(widget.categoryType),
+            iconName: drift.Value(_selectedIcon),
+            colorHex: drift.Value(_selectedColor),
+            isDeleted: const drift.Value(false),
+          ),
+        );
+        final newCat = await db.getCategoryById(id);
+        if (mounted) Navigator.of(context).pop(newCat);
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -143,9 +182,11 @@ class _CategoryFormSheetState extends ConsumerState<CategoryFormSheet> {
                 ),
               ),
               Text(
-                widget.categoryType == 'EXPENSE'
-                    ? 'Tambah Jenis Pengeluaran Baru'
-                    : 'Tambah Kategori Pemasukan Baru',
+                _isEditing
+                    ? 'Edit Kategori'
+                    : (widget.categoryType == 'EXPENSE'
+                        ? 'Tambah Jenis Pengeluaran Baru'
+                        : 'Tambah Kategori Pemasukan Baru'),
                 style: const TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 16,
@@ -259,7 +300,10 @@ class _CategoryFormSheetState extends ConsumerState<CategoryFormSheet> {
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: const Text('Simpan Kategori Baru', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                  child: Text(
+                    _isEditing ? 'Simpan Perubahan' : 'Simpan Kategori Baru',
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                  ),
                 ),
               ),
             ],

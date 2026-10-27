@@ -12,6 +12,7 @@ import '../../quick_entry/presentation/quick_entry_sheet.dart';
 import '../providers/dashboard_provider.dart';
 import '../../wallets/presentation/wallet_form_sheet.dart';
 import '../../settings/presentation/settings_screen.dart';
+import '../../search/presentation/transaction_search_screen.dart';
 import 'widgets/balance_summary_card.dart';
 import 'widgets/quick_action_bento_bar.dart';
 import 'widgets/daily_transaction_group.dart';
@@ -101,6 +102,26 @@ class DashboardScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(width: 6),
+          // Tombol Cari Transaksi (Feature 4)
+          IconButton(
+            icon: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceElevated,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.border),
+              ),
+              child: const Icon(LucideIcons.search, color: AppColors.textPrimary, size: 18),
+            ),
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const TransactionSearchScreen()),
+              );
+            },
+            tooltip: 'Cari Transaksi',
+          ),
+          const SizedBox(width: 4),
           // Tombol Pengaturan
           IconButton(
             icon: Container(

@@ -1035,6 +1035,12 @@ class $TransactionsTable extends Transactions
   late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
       'created_at', aliasedName, false,
       type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _receiptPathMeta =
+      const VerificationMeta('receiptPath');
+  @override
+  late final GeneratedColumn<String> receiptPath = GeneratedColumn<String>(
+      'receipt_path', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -1045,7 +1051,8 @@ class $TransactionsTable extends Transactions
         type,
         note,
         transactionDate,
-        createdAt
+        createdAt,
+        receiptPath
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1110,6 +1117,12 @@ class $TransactionsTable extends Transactions
     } else if (isInserting) {
       context.missing(_createdAtMeta);
     }
+    if (data.containsKey('receipt_path')) {
+      context.handle(
+          _receiptPathMeta,
+          receiptPath.isAcceptableOrUnknown(
+              data['receipt_path']!, _receiptPathMeta));
+    }
     return context;
   }
 
@@ -1137,6 +1150,8 @@ class $TransactionsTable extends Transactions
           DriftSqlType.dateTime, data['${effectivePrefix}transaction_date'])!,
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+      receiptPath: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}receipt_path']),
     );
   }
 
@@ -1156,6 +1171,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   final String? note;
   final DateTime transactionDate;
   final DateTime createdAt;
+  final String? receiptPath;
   const Transaction(
       {required this.id,
       required this.walletId,
@@ -1165,7 +1181,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       required this.type,
       this.note,
       required this.transactionDate,
-      required this.createdAt});
+      required this.createdAt,
+      this.receiptPath});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -1184,6 +1201,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     }
     map['transaction_date'] = Variable<DateTime>(transactionDate);
     map['created_at'] = Variable<DateTime>(createdAt);
+    if (!nullToAbsent || receiptPath != null) {
+      map['receipt_path'] = Variable<String>(receiptPath);
+    }
     return map;
   }
 
@@ -1202,6 +1222,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       note: note == null && nullToAbsent ? const Value.absent() : Value(note),
       transactionDate: Value(transactionDate),
       createdAt: Value(createdAt),
+      receiptPath: receiptPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(receiptPath),
     );
   }
 
@@ -1218,6 +1241,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       note: serializer.fromJson<String?>(json['note']),
       transactionDate: serializer.fromJson<DateTime>(json['transactionDate']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      receiptPath: serializer.fromJson<String?>(json['receiptPath']),
     );
   }
   @override
@@ -1233,6 +1257,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'note': serializer.toJson<String?>(note),
       'transactionDate': serializer.toJson<DateTime>(transactionDate),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'receiptPath': serializer.toJson<String?>(receiptPath),
     };
   }
 
@@ -1245,7 +1270,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           String? type,
           Value<String?> note = const Value.absent(),
           DateTime? transactionDate,
-          DateTime? createdAt}) =>
+          DateTime? createdAt,
+          Value<String?> receiptPath = const Value.absent()}) =>
       Transaction(
         id: id ?? this.id,
         walletId: walletId ?? this.walletId,
@@ -1256,6 +1282,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
         note: note.present ? note.value : this.note,
         transactionDate: transactionDate ?? this.transactionDate,
         createdAt: createdAt ?? this.createdAt,
+        receiptPath: receiptPath.present ? receiptPath.value : this.receiptPath,
       );
   Transaction copyWithCompanion(TransactionsCompanion data) {
     return Transaction(
@@ -1272,6 +1299,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ? data.transactionDate.value
           : this.transactionDate,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      receiptPath:
+          data.receiptPath.present ? data.receiptPath.value : this.receiptPath,
     );
   }
 
@@ -1286,14 +1315,15 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('type: $type, ')
           ..write('note: $note, ')
           ..write('transactionDate: $transactionDate, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('receiptPath: $receiptPath')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode => Object.hash(id, walletId, toWalletId, categoryId, amount,
-      type, note, transactionDate, createdAt);
+      type, note, transactionDate, createdAt, receiptPath);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1306,7 +1336,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.type == this.type &&
           other.note == this.note &&
           other.transactionDate == this.transactionDate &&
-          other.createdAt == this.createdAt);
+          other.createdAt == this.createdAt &&
+          other.receiptPath == this.receiptPath);
 }
 
 class TransactionsCompanion extends UpdateCompanion<Transaction> {
@@ -1319,6 +1350,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<String?> note;
   final Value<DateTime> transactionDate;
   final Value<DateTime> createdAt;
+  final Value<String?> receiptPath;
   final Value<int> rowid;
   const TransactionsCompanion({
     this.id = const Value.absent(),
@@ -1330,6 +1362,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.note = const Value.absent(),
     this.transactionDate = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.receiptPath = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   TransactionsCompanion.insert({
@@ -1342,6 +1375,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.note = const Value.absent(),
     required DateTime transactionDate,
     required DateTime createdAt,
+    this.receiptPath = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : id = Value(id),
         walletId = Value(walletId),
@@ -1359,6 +1393,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<String>? note,
     Expression<DateTime>? transactionDate,
     Expression<DateTime>? createdAt,
+    Expression<String>? receiptPath,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1371,6 +1406,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (note != null) 'note': note,
       if (transactionDate != null) 'transaction_date': transactionDate,
       if (createdAt != null) 'created_at': createdAt,
+      if (receiptPath != null) 'receipt_path': receiptPath,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1385,6 +1421,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       Value<String?>? note,
       Value<DateTime>? transactionDate,
       Value<DateTime>? createdAt,
+      Value<String?>? receiptPath,
       Value<int>? rowid}) {
     return TransactionsCompanion(
       id: id ?? this.id,
@@ -1396,6 +1433,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       note: note ?? this.note,
       transactionDate: transactionDate ?? this.transactionDate,
       createdAt: createdAt ?? this.createdAt,
+      receiptPath: receiptPath ?? this.receiptPath,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1430,6 +1468,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (receiptPath.present) {
+      map['receipt_path'] = Variable<String>(receiptPath.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1448,6 +1489,631 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('note: $note, ')
           ..write('transactionDate: $transactionDate, ')
           ..write('createdAt: $createdAt, ')
+          ..write('receiptPath: $receiptPath, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $RecurringTransactionsTable extends RecurringTransactions
+    with TableInfo<$RecurringTransactionsTable, RecurringTransaction> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RecurringTransactionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+      'id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+      'name', aliasedName, false,
+      additionalChecks:
+          GeneratedColumn.checkTextLength(minTextLength: 1, maxTextLength: 100),
+      type: DriftSqlType.string,
+      requiredDuringInsert: true);
+  static const VerificationMeta _amountMeta = const VerificationMeta('amount');
+  @override
+  late final GeneratedColumn<int> amount = GeneratedColumn<int>(
+      'amount', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+      'type', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _walletIdMeta =
+      const VerificationMeta('walletId');
+  @override
+  late final GeneratedColumn<String> walletId = GeneratedColumn<String>(
+      'wallet_id', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: true,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('REFERENCES wallets (id)'));
+  static const VerificationMeta _toWalletIdMeta =
+      const VerificationMeta('toWalletId');
+  @override
+  late final GeneratedColumn<String> toWalletId = GeneratedColumn<String>(
+      'to_wallet_id', aliasedName, true,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('REFERENCES wallets (id)'));
+  static const VerificationMeta _categoryIdMeta =
+      const VerificationMeta('categoryId');
+  @override
+  late final GeneratedColumn<String> categoryId = GeneratedColumn<String>(
+      'category_id', aliasedName, true,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('REFERENCES categories (id)'));
+  static const VerificationMeta _frequencyMeta =
+      const VerificationMeta('frequency');
+  @override
+  late final GeneratedColumn<String> frequency = GeneratedColumn<String>(
+      'frequency', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _nextDueDateMeta =
+      const VerificationMeta('nextDueDate');
+  @override
+  late final GeneratedColumn<DateTime> nextDueDate = GeneratedColumn<DateTime>(
+      'next_due_date', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _lastGeneratedDateMeta =
+      const VerificationMeta('lastGeneratedDate');
+  @override
+  late final GeneratedColumn<DateTime> lastGeneratedDate =
+      GeneratedColumn<DateTime>('last_generated_date', aliasedName, true,
+          type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _isActiveMeta =
+      const VerificationMeta('isActive');
+  @override
+  late final GeneratedColumn<bool> isActive = GeneratedColumn<bool>(
+      'is_active', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("is_active" IN (0, 1))'),
+      defaultValue: const Constant(true));
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [
+        id,
+        name,
+        amount,
+        type,
+        walletId,
+        toWalletId,
+        categoryId,
+        frequency,
+        nextDueDate,
+        lastGeneratedDate,
+        isActive,
+        createdAt
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'recurring_transactions';
+  @override
+  VerificationContext validateIntegrity(
+      Insertable<RecurringTransaction> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+          _nameMeta, name.isAcceptableOrUnknown(data['name']!, _nameMeta));
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('amount')) {
+      context.handle(_amountMeta,
+          amount.isAcceptableOrUnknown(data['amount']!, _amountMeta));
+    } else if (isInserting) {
+      context.missing(_amountMeta);
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+          _typeMeta, type.isAcceptableOrUnknown(data['type']!, _typeMeta));
+    } else if (isInserting) {
+      context.missing(_typeMeta);
+    }
+    if (data.containsKey('wallet_id')) {
+      context.handle(_walletIdMeta,
+          walletId.isAcceptableOrUnknown(data['wallet_id']!, _walletIdMeta));
+    } else if (isInserting) {
+      context.missing(_walletIdMeta);
+    }
+    if (data.containsKey('to_wallet_id')) {
+      context.handle(
+          _toWalletIdMeta,
+          toWalletId.isAcceptableOrUnknown(
+              data['to_wallet_id']!, _toWalletIdMeta));
+    }
+    if (data.containsKey('category_id')) {
+      context.handle(
+          _categoryIdMeta,
+          categoryId.isAcceptableOrUnknown(
+              data['category_id']!, _categoryIdMeta));
+    }
+    if (data.containsKey('frequency')) {
+      context.handle(_frequencyMeta,
+          frequency.isAcceptableOrUnknown(data['frequency']!, _frequencyMeta));
+    } else if (isInserting) {
+      context.missing(_frequencyMeta);
+    }
+    if (data.containsKey('next_due_date')) {
+      context.handle(
+          _nextDueDateMeta,
+          nextDueDate.isAcceptableOrUnknown(
+              data['next_due_date']!, _nextDueDateMeta));
+    } else if (isInserting) {
+      context.missing(_nextDueDateMeta);
+    }
+    if (data.containsKey('last_generated_date')) {
+      context.handle(
+          _lastGeneratedDateMeta,
+          lastGeneratedDate.isAcceptableOrUnknown(
+              data['last_generated_date']!, _lastGeneratedDateMeta));
+    }
+    if (data.containsKey('is_active')) {
+      context.handle(_isActiveMeta,
+          isActive.isAcceptableOrUnknown(data['is_active']!, _isActiveMeta));
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  RecurringTransaction map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RecurringTransaction(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}id'])!,
+      name: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}name'])!,
+      amount: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}amount'])!,
+      type: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}type'])!,
+      walletId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}wallet_id'])!,
+      toWalletId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}to_wallet_id']),
+      categoryId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}category_id']),
+      frequency: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}frequency'])!,
+      nextDueDate: attachedDatabase.typeMapping.read(
+          DriftSqlType.dateTime, data['${effectivePrefix}next_due_date'])!,
+      lastGeneratedDate: attachedDatabase.typeMapping.read(
+          DriftSqlType.dateTime, data['${effectivePrefix}last_generated_date']),
+      isActive: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_active'])!,
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+    );
+  }
+
+  @override
+  $RecurringTransactionsTable createAlias(String alias) {
+    return $RecurringTransactionsTable(attachedDatabase, alias);
+  }
+}
+
+class RecurringTransaction extends DataClass
+    implements Insertable<RecurringTransaction> {
+  final String id;
+  final String name;
+  final int amount;
+  final String type;
+  final String walletId;
+  final String? toWalletId;
+  final String? categoryId;
+  final String frequency;
+  final DateTime nextDueDate;
+  final DateTime? lastGeneratedDate;
+  final bool isActive;
+  final DateTime createdAt;
+  const RecurringTransaction(
+      {required this.id,
+      required this.name,
+      required this.amount,
+      required this.type,
+      required this.walletId,
+      this.toWalletId,
+      this.categoryId,
+      required this.frequency,
+      required this.nextDueDate,
+      this.lastGeneratedDate,
+      required this.isActive,
+      required this.createdAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    map['amount'] = Variable<int>(amount);
+    map['type'] = Variable<String>(type);
+    map['wallet_id'] = Variable<String>(walletId);
+    if (!nullToAbsent || toWalletId != null) {
+      map['to_wallet_id'] = Variable<String>(toWalletId);
+    }
+    if (!nullToAbsent || categoryId != null) {
+      map['category_id'] = Variable<String>(categoryId);
+    }
+    map['frequency'] = Variable<String>(frequency);
+    map['next_due_date'] = Variable<DateTime>(nextDueDate);
+    if (!nullToAbsent || lastGeneratedDate != null) {
+      map['last_generated_date'] = Variable<DateTime>(lastGeneratedDate);
+    }
+    map['is_active'] = Variable<bool>(isActive);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  RecurringTransactionsCompanion toCompanion(bool nullToAbsent) {
+    return RecurringTransactionsCompanion(
+      id: Value(id),
+      name: Value(name),
+      amount: Value(amount),
+      type: Value(type),
+      walletId: Value(walletId),
+      toWalletId: toWalletId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(toWalletId),
+      categoryId: categoryId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(categoryId),
+      frequency: Value(frequency),
+      nextDueDate: Value(nextDueDate),
+      lastGeneratedDate: lastGeneratedDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastGeneratedDate),
+      isActive: Value(isActive),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory RecurringTransaction.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RecurringTransaction(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      amount: serializer.fromJson<int>(json['amount']),
+      type: serializer.fromJson<String>(json['type']),
+      walletId: serializer.fromJson<String>(json['walletId']),
+      toWalletId: serializer.fromJson<String?>(json['toWalletId']),
+      categoryId: serializer.fromJson<String?>(json['categoryId']),
+      frequency: serializer.fromJson<String>(json['frequency']),
+      nextDueDate: serializer.fromJson<DateTime>(json['nextDueDate']),
+      lastGeneratedDate:
+          serializer.fromJson<DateTime?>(json['lastGeneratedDate']),
+      isActive: serializer.fromJson<bool>(json['isActive']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'amount': serializer.toJson<int>(amount),
+      'type': serializer.toJson<String>(type),
+      'walletId': serializer.toJson<String>(walletId),
+      'toWalletId': serializer.toJson<String?>(toWalletId),
+      'categoryId': serializer.toJson<String?>(categoryId),
+      'frequency': serializer.toJson<String>(frequency),
+      'nextDueDate': serializer.toJson<DateTime>(nextDueDate),
+      'lastGeneratedDate': serializer.toJson<DateTime?>(lastGeneratedDate),
+      'isActive': serializer.toJson<bool>(isActive),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  RecurringTransaction copyWith(
+          {String? id,
+          String? name,
+          int? amount,
+          String? type,
+          String? walletId,
+          Value<String?> toWalletId = const Value.absent(),
+          Value<String?> categoryId = const Value.absent(),
+          String? frequency,
+          DateTime? nextDueDate,
+          Value<DateTime?> lastGeneratedDate = const Value.absent(),
+          bool? isActive,
+          DateTime? createdAt}) =>
+      RecurringTransaction(
+        id: id ?? this.id,
+        name: name ?? this.name,
+        amount: amount ?? this.amount,
+        type: type ?? this.type,
+        walletId: walletId ?? this.walletId,
+        toWalletId: toWalletId.present ? toWalletId.value : this.toWalletId,
+        categoryId: categoryId.present ? categoryId.value : this.categoryId,
+        frequency: frequency ?? this.frequency,
+        nextDueDate: nextDueDate ?? this.nextDueDate,
+        lastGeneratedDate: lastGeneratedDate.present
+            ? lastGeneratedDate.value
+            : this.lastGeneratedDate,
+        isActive: isActive ?? this.isActive,
+        createdAt: createdAt ?? this.createdAt,
+      );
+  RecurringTransaction copyWithCompanion(RecurringTransactionsCompanion data) {
+    return RecurringTransaction(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      amount: data.amount.present ? data.amount.value : this.amount,
+      type: data.type.present ? data.type.value : this.type,
+      walletId: data.walletId.present ? data.walletId.value : this.walletId,
+      toWalletId:
+          data.toWalletId.present ? data.toWalletId.value : this.toWalletId,
+      categoryId:
+          data.categoryId.present ? data.categoryId.value : this.categoryId,
+      frequency: data.frequency.present ? data.frequency.value : this.frequency,
+      nextDueDate:
+          data.nextDueDate.present ? data.nextDueDate.value : this.nextDueDate,
+      lastGeneratedDate: data.lastGeneratedDate.present
+          ? data.lastGeneratedDate.value
+          : this.lastGeneratedDate,
+      isActive: data.isActive.present ? data.isActive.value : this.isActive,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RecurringTransaction(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('amount: $amount, ')
+          ..write('type: $type, ')
+          ..write('walletId: $walletId, ')
+          ..write('toWalletId: $toWalletId, ')
+          ..write('categoryId: $categoryId, ')
+          ..write('frequency: $frequency, ')
+          ..write('nextDueDate: $nextDueDate, ')
+          ..write('lastGeneratedDate: $lastGeneratedDate, ')
+          ..write('isActive: $isActive, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+      id,
+      name,
+      amount,
+      type,
+      walletId,
+      toWalletId,
+      categoryId,
+      frequency,
+      nextDueDate,
+      lastGeneratedDate,
+      isActive,
+      createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RecurringTransaction &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.amount == this.amount &&
+          other.type == this.type &&
+          other.walletId == this.walletId &&
+          other.toWalletId == this.toWalletId &&
+          other.categoryId == this.categoryId &&
+          other.frequency == this.frequency &&
+          other.nextDueDate == this.nextDueDate &&
+          other.lastGeneratedDate == this.lastGeneratedDate &&
+          other.isActive == this.isActive &&
+          other.createdAt == this.createdAt);
+}
+
+class RecurringTransactionsCompanion
+    extends UpdateCompanion<RecurringTransaction> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<int> amount;
+  final Value<String> type;
+  final Value<String> walletId;
+  final Value<String?> toWalletId;
+  final Value<String?> categoryId;
+  final Value<String> frequency;
+  final Value<DateTime> nextDueDate;
+  final Value<DateTime?> lastGeneratedDate;
+  final Value<bool> isActive;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const RecurringTransactionsCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.amount = const Value.absent(),
+    this.type = const Value.absent(),
+    this.walletId = const Value.absent(),
+    this.toWalletId = const Value.absent(),
+    this.categoryId = const Value.absent(),
+    this.frequency = const Value.absent(),
+    this.nextDueDate = const Value.absent(),
+    this.lastGeneratedDate = const Value.absent(),
+    this.isActive = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  RecurringTransactionsCompanion.insert({
+    required String id,
+    required String name,
+    required int amount,
+    required String type,
+    required String walletId,
+    this.toWalletId = const Value.absent(),
+    this.categoryId = const Value.absent(),
+    required String frequency,
+    required DateTime nextDueDate,
+    this.lastGeneratedDate = const Value.absent(),
+    this.isActive = const Value.absent(),
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  })  : id = Value(id),
+        name = Value(name),
+        amount = Value(amount),
+        type = Value(type),
+        walletId = Value(walletId),
+        frequency = Value(frequency),
+        nextDueDate = Value(nextDueDate),
+        createdAt = Value(createdAt);
+  static Insertable<RecurringTransaction> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<int>? amount,
+    Expression<String>? type,
+    Expression<String>? walletId,
+    Expression<String>? toWalletId,
+    Expression<String>? categoryId,
+    Expression<String>? frequency,
+    Expression<DateTime>? nextDueDate,
+    Expression<DateTime>? lastGeneratedDate,
+    Expression<bool>? isActive,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (amount != null) 'amount': amount,
+      if (type != null) 'type': type,
+      if (walletId != null) 'wallet_id': walletId,
+      if (toWalletId != null) 'to_wallet_id': toWalletId,
+      if (categoryId != null) 'category_id': categoryId,
+      if (frequency != null) 'frequency': frequency,
+      if (nextDueDate != null) 'next_due_date': nextDueDate,
+      if (lastGeneratedDate != null) 'last_generated_date': lastGeneratedDate,
+      if (isActive != null) 'is_active': isActive,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  RecurringTransactionsCompanion copyWith(
+      {Value<String>? id,
+      Value<String>? name,
+      Value<int>? amount,
+      Value<String>? type,
+      Value<String>? walletId,
+      Value<String?>? toWalletId,
+      Value<String?>? categoryId,
+      Value<String>? frequency,
+      Value<DateTime>? nextDueDate,
+      Value<DateTime?>? lastGeneratedDate,
+      Value<bool>? isActive,
+      Value<DateTime>? createdAt,
+      Value<int>? rowid}) {
+    return RecurringTransactionsCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      amount: amount ?? this.amount,
+      type: type ?? this.type,
+      walletId: walletId ?? this.walletId,
+      toWalletId: toWalletId ?? this.toWalletId,
+      categoryId: categoryId ?? this.categoryId,
+      frequency: frequency ?? this.frequency,
+      nextDueDate: nextDueDate ?? this.nextDueDate,
+      lastGeneratedDate: lastGeneratedDate ?? this.lastGeneratedDate,
+      isActive: isActive ?? this.isActive,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (amount.present) {
+      map['amount'] = Variable<int>(amount.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (walletId.present) {
+      map['wallet_id'] = Variable<String>(walletId.value);
+    }
+    if (toWalletId.present) {
+      map['to_wallet_id'] = Variable<String>(toWalletId.value);
+    }
+    if (categoryId.present) {
+      map['category_id'] = Variable<String>(categoryId.value);
+    }
+    if (frequency.present) {
+      map['frequency'] = Variable<String>(frequency.value);
+    }
+    if (nextDueDate.present) {
+      map['next_due_date'] = Variable<DateTime>(nextDueDate.value);
+    }
+    if (lastGeneratedDate.present) {
+      map['last_generated_date'] = Variable<DateTime>(lastGeneratedDate.value);
+    }
+    if (isActive.present) {
+      map['is_active'] = Variable<bool>(isActive.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RecurringTransactionsCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('amount: $amount, ')
+          ..write('type: $type, ')
+          ..write('walletId: $walletId, ')
+          ..write('toWalletId: $toWalletId, ')
+          ..write('categoryId: $categoryId, ')
+          ..write('frequency: $frequency, ')
+          ..write('nextDueDate: $nextDueDate, ')
+          ..write('lastGeneratedDate: $lastGeneratedDate, ')
+          ..write('isActive: $isActive, ')
+          ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1460,12 +2126,14 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $WalletsTable wallets = $WalletsTable(this);
   late final $CategoriesTable categories = $CategoriesTable(this);
   late final $TransactionsTable transactions = $TransactionsTable(this);
+  late final $RecurringTransactionsTable recurringTransactions =
+      $RecurringTransactionsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities =>
-      [wallets, categories, transactions];
+      [wallets, categories, transactions, recurringTransactions];
 }
 
 typedef $$WalletsTableCreateCompanionBuilder = WalletsCompanion Function({
@@ -1820,6 +2488,24 @@ class $$CategoriesTableFilterComposer
                 $state.db.transactions, joinBuilder, parentComposers)));
     return f(composer);
   }
+
+  ComposableFilter recurringTransactionsRefs(
+      ComposableFilter Function($$RecurringTransactionsTableFilterComposer f)
+          f) {
+    final $$RecurringTransactionsTableFilterComposer composer =
+        $state.composerBuilder(
+            composer: this,
+            getCurrentColumn: (t) => t.id,
+            referencedTable: $state.db.recurringTransactions,
+            getReferencedColumn: (t) => t.categoryId,
+            builder: (joinBuilder, parentComposers) =>
+                $$RecurringTransactionsTableFilterComposer(ComposerState(
+                    $state.db,
+                    $state.db.recurringTransactions,
+                    joinBuilder,
+                    parentComposers)));
+    return f(composer);
+  }
 }
 
 class $$CategoriesTableOrderingComposer
@@ -1872,6 +2558,7 @@ typedef $$TransactionsTableCreateCompanionBuilder = TransactionsCompanion
   Value<String?> note,
   required DateTime transactionDate,
   required DateTime createdAt,
+  Value<String?> receiptPath,
   Value<int> rowid,
 });
 typedef $$TransactionsTableUpdateCompanionBuilder = TransactionsCompanion
@@ -1885,6 +2572,7 @@ typedef $$TransactionsTableUpdateCompanionBuilder = TransactionsCompanion
   Value<String?> note,
   Value<DateTime> transactionDate,
   Value<DateTime> createdAt,
+  Value<String?> receiptPath,
   Value<int> rowid,
 });
 
@@ -1914,6 +2602,7 @@ class $$TransactionsTableTableManager extends RootTableManager<
             Value<String?> note = const Value.absent(),
             Value<DateTime> transactionDate = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
+            Value<String?> receiptPath = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               TransactionsCompanion(
@@ -1926,6 +2615,7 @@ class $$TransactionsTableTableManager extends RootTableManager<
             note: note,
             transactionDate: transactionDate,
             createdAt: createdAt,
+            receiptPath: receiptPath,
             rowid: rowid,
           ),
           createCompanionCallback: ({
@@ -1938,6 +2628,7 @@ class $$TransactionsTableTableManager extends RootTableManager<
             Value<String?> note = const Value.absent(),
             required DateTime transactionDate,
             required DateTime createdAt,
+            Value<String?> receiptPath = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               TransactionsCompanion.insert(
@@ -1950,6 +2641,7 @@ class $$TransactionsTableTableManager extends RootTableManager<
             note: note,
             transactionDate: transactionDate,
             createdAt: createdAt,
+            receiptPath: receiptPath,
             rowid: rowid,
           ),
         ));
@@ -1985,6 +2677,11 @@ class $$TransactionsTableFilterComposer
 
   ColumnFilters<DateTime> get createdAt => $state.composableBuilder(
       column: $state.table.createdAt,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get receiptPath => $state.composableBuilder(
+      column: $state.table.receiptPath,
       builder: (column, joinBuilders) =>
           ColumnFilters(column, joinBuilders: joinBuilders));
 
@@ -2058,6 +2755,294 @@ class $$TransactionsTableOrderingComposer
       builder: (column, joinBuilders) =>
           ColumnOrderings(column, joinBuilders: joinBuilders));
 
+  ColumnOrderings<String> get receiptPath => $state.composableBuilder(
+      column: $state.table.receiptPath,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  $$WalletsTableOrderingComposer get walletId {
+    final $$WalletsTableOrderingComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.walletId,
+        referencedTable: $state.db.wallets,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder, parentComposers) =>
+            $$WalletsTableOrderingComposer(ComposerState(
+                $state.db, $state.db.wallets, joinBuilder, parentComposers)));
+    return composer;
+  }
+
+  $$WalletsTableOrderingComposer get toWalletId {
+    final $$WalletsTableOrderingComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.toWalletId,
+        referencedTable: $state.db.wallets,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder, parentComposers) =>
+            $$WalletsTableOrderingComposer(ComposerState(
+                $state.db, $state.db.wallets, joinBuilder, parentComposers)));
+    return composer;
+  }
+
+  $$CategoriesTableOrderingComposer get categoryId {
+    final $$CategoriesTableOrderingComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.categoryId,
+        referencedTable: $state.db.categories,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder, parentComposers) =>
+            $$CategoriesTableOrderingComposer(ComposerState($state.db,
+                $state.db.categories, joinBuilder, parentComposers)));
+    return composer;
+  }
+}
+
+typedef $$RecurringTransactionsTableCreateCompanionBuilder
+    = RecurringTransactionsCompanion Function({
+  required String id,
+  required String name,
+  required int amount,
+  required String type,
+  required String walletId,
+  Value<String?> toWalletId,
+  Value<String?> categoryId,
+  required String frequency,
+  required DateTime nextDueDate,
+  Value<DateTime?> lastGeneratedDate,
+  Value<bool> isActive,
+  required DateTime createdAt,
+  Value<int> rowid,
+});
+typedef $$RecurringTransactionsTableUpdateCompanionBuilder
+    = RecurringTransactionsCompanion Function({
+  Value<String> id,
+  Value<String> name,
+  Value<int> amount,
+  Value<String> type,
+  Value<String> walletId,
+  Value<String?> toWalletId,
+  Value<String?> categoryId,
+  Value<String> frequency,
+  Value<DateTime> nextDueDate,
+  Value<DateTime?> lastGeneratedDate,
+  Value<bool> isActive,
+  Value<DateTime> createdAt,
+  Value<int> rowid,
+});
+
+class $$RecurringTransactionsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $RecurringTransactionsTable,
+    RecurringTransaction,
+    $$RecurringTransactionsTableFilterComposer,
+    $$RecurringTransactionsTableOrderingComposer,
+    $$RecurringTransactionsTableCreateCompanionBuilder,
+    $$RecurringTransactionsTableUpdateCompanionBuilder> {
+  $$RecurringTransactionsTableTableManager(
+      _$AppDatabase db, $RecurringTransactionsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          filteringComposer: $$RecurringTransactionsTableFilterComposer(
+              ComposerState(db, table)),
+          orderingComposer: $$RecurringTransactionsTableOrderingComposer(
+              ComposerState(db, table)),
+          updateCompanionCallback: ({
+            Value<String> id = const Value.absent(),
+            Value<String> name = const Value.absent(),
+            Value<int> amount = const Value.absent(),
+            Value<String> type = const Value.absent(),
+            Value<String> walletId = const Value.absent(),
+            Value<String?> toWalletId = const Value.absent(),
+            Value<String?> categoryId = const Value.absent(),
+            Value<String> frequency = const Value.absent(),
+            Value<DateTime> nextDueDate = const Value.absent(),
+            Value<DateTime?> lastGeneratedDate = const Value.absent(),
+            Value<bool> isActive = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              RecurringTransactionsCompanion(
+            id: id,
+            name: name,
+            amount: amount,
+            type: type,
+            walletId: walletId,
+            toWalletId: toWalletId,
+            categoryId: categoryId,
+            frequency: frequency,
+            nextDueDate: nextDueDate,
+            lastGeneratedDate: lastGeneratedDate,
+            isActive: isActive,
+            createdAt: createdAt,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String id,
+            required String name,
+            required int amount,
+            required String type,
+            required String walletId,
+            Value<String?> toWalletId = const Value.absent(),
+            Value<String?> categoryId = const Value.absent(),
+            required String frequency,
+            required DateTime nextDueDate,
+            Value<DateTime?> lastGeneratedDate = const Value.absent(),
+            Value<bool> isActive = const Value.absent(),
+            required DateTime createdAt,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              RecurringTransactionsCompanion.insert(
+            id: id,
+            name: name,
+            amount: amount,
+            type: type,
+            walletId: walletId,
+            toWalletId: toWalletId,
+            categoryId: categoryId,
+            frequency: frequency,
+            nextDueDate: nextDueDate,
+            lastGeneratedDate: lastGeneratedDate,
+            isActive: isActive,
+            createdAt: createdAt,
+            rowid: rowid,
+          ),
+        ));
+}
+
+class $$RecurringTransactionsTableFilterComposer
+    extends FilterComposer<_$AppDatabase, $RecurringTransactionsTable> {
+  $$RecurringTransactionsTableFilterComposer(super.$state);
+  ColumnFilters<String> get id => $state.composableBuilder(
+      column: $state.table.id,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get name => $state.composableBuilder(
+      column: $state.table.name,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<int> get amount => $state.composableBuilder(
+      column: $state.table.amount,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get type => $state.composableBuilder(
+      column: $state.table.type,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get frequency => $state.composableBuilder(
+      column: $state.table.frequency,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<DateTime> get nextDueDate => $state.composableBuilder(
+      column: $state.table.nextDueDate,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<DateTime> get lastGeneratedDate => $state.composableBuilder(
+      column: $state.table.lastGeneratedDate,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<bool> get isActive => $state.composableBuilder(
+      column: $state.table.isActive,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<DateTime> get createdAt => $state.composableBuilder(
+      column: $state.table.createdAt,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  $$WalletsTableFilterComposer get walletId {
+    final $$WalletsTableFilterComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.walletId,
+        referencedTable: $state.db.wallets,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder, parentComposers) => $$WalletsTableFilterComposer(
+            ComposerState(
+                $state.db, $state.db.wallets, joinBuilder, parentComposers)));
+    return composer;
+  }
+
+  $$WalletsTableFilterComposer get toWalletId {
+    final $$WalletsTableFilterComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.toWalletId,
+        referencedTable: $state.db.wallets,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder, parentComposers) => $$WalletsTableFilterComposer(
+            ComposerState(
+                $state.db, $state.db.wallets, joinBuilder, parentComposers)));
+    return composer;
+  }
+
+  $$CategoriesTableFilterComposer get categoryId {
+    final $$CategoriesTableFilterComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.categoryId,
+        referencedTable: $state.db.categories,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder, parentComposers) =>
+            $$CategoriesTableFilterComposer(ComposerState($state.db,
+                $state.db.categories, joinBuilder, parentComposers)));
+    return composer;
+  }
+}
+
+class $$RecurringTransactionsTableOrderingComposer
+    extends OrderingComposer<_$AppDatabase, $RecurringTransactionsTable> {
+  $$RecurringTransactionsTableOrderingComposer(super.$state);
+  ColumnOrderings<String> get id => $state.composableBuilder(
+      column: $state.table.id,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get name => $state.composableBuilder(
+      column: $state.table.name,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<int> get amount => $state.composableBuilder(
+      column: $state.table.amount,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get type => $state.composableBuilder(
+      column: $state.table.type,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get frequency => $state.composableBuilder(
+      column: $state.table.frequency,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<DateTime> get nextDueDate => $state.composableBuilder(
+      column: $state.table.nextDueDate,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<DateTime> get lastGeneratedDate => $state.composableBuilder(
+      column: $state.table.lastGeneratedDate,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<bool> get isActive => $state.composableBuilder(
+      column: $state.table.isActive,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<DateTime> get createdAt => $state.composableBuilder(
+      column: $state.table.createdAt,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
   $$WalletsTableOrderingComposer get walletId {
     final $$WalletsTableOrderingComposer composer = $state.composerBuilder(
         composer: this,
@@ -2104,4 +3089,6 @@ class $AppDatabaseManager {
       $$CategoriesTableTableManager(_db, _db.categories);
   $$TransactionsTableTableManager get transactions =>
       $$TransactionsTableTableManager(_db, _db.transactions);
+  $$RecurringTransactionsTableTableManager get recurringTransactions =>
+      $$RecurringTransactionsTableTableManager(_db, _db.recurringTransactions);
 }

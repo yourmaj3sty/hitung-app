@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/providers/database_provider.dart';
+import '../../../core/services/notification_service.dart';
 import '../../onboarding/providers/onboarding_provider.dart';
 
 /// Penanda "parameter tidak diisi" pada copyWith, agar field nullable bisa
@@ -20,6 +21,7 @@ class QuickEntryState {
   final String note;
   final bool isSaving;
   final String? errorMessage;
+  final String? receiptPath;
   /// Terisi saat mengedit transaksi yang sudah ada; null berarti transaksi baru.
   final String? editingTransactionId;
 
@@ -31,6 +33,7 @@ class QuickEntryState {
     this.selectedCategoryId,
     DateTime? date,
     this.note = '',
+    this.receiptPath,
     this.isSaving = false,
     this.errorMessage,
     this.editingTransactionId,
@@ -49,7 +52,7 @@ class QuickEntryState {
     }
   }
 
-  /// Field nullable (dompet, dompet tujuan, kategori) bisa dikosongkan dengan null.
+  /// Field nullable (dompet, dompet tujuan, kategori, receiptPath) bisa dikosongkan dengan null.
   /// [errorMessage] selalu direset kecuali diisi.
   QuickEntryState copyWith({
     String? type,
@@ -59,6 +62,7 @@ class QuickEntryState {
     Object? selectedCategoryId = _unset,
     DateTime? date,
     String? note,
+    Object? receiptPath = _unset,
     bool? isSaving,
     String? errorMessage,
   }) {
@@ -73,6 +77,8 @@ class QuickEntryState {
           identical(selectedCategoryId, _unset) ? this.selectedCategoryId : selectedCategoryId as String?,
       date: date ?? this.date,
       note: note ?? this.note,
+      receiptPath:
+          identical(receiptPath, _unset) ? this.receiptPath : receiptPath as String?,
       isSaving: isSaving ?? this.isSaving,
       errorMessage: errorMessage,
       editingTransactionId: editingTransactionId,
@@ -137,6 +143,7 @@ class QuickEntryNotifier extends StateNotifier<QuickEntryState> {
       selectedCategoryId: tx.categoryId,
       date: tx.transactionDate,
       note: tx.note ?? '',
+      receiptPath: tx.receiptPath,
       editingTransactionId: tx.id,
     );
   }
@@ -229,6 +236,10 @@ class QuickEntryNotifier extends StateNotifier<QuickEntryState> {
     state = state.copyWith(note: note);
   }
 
+  void setReceiptPath(String? path) {
+    state = state.copyWith(receiptPath: path);
+  }
+
   Future<bool> saveTransaction() async {
     if (!state.canSave) return false;
 
@@ -247,6 +258,7 @@ class QuickEntryNotifier extends StateNotifier<QuickEntryState> {
         type: Value(state.type),
         note: Value(state.note.trim().isEmpty ? null : state.note.trim()),
         transactionDate: Value(state.date),
+        receiptPath: Value(state.receiptPath),
         createdAt: Value(DateTime.now()),
       );
 
@@ -259,6 +271,11 @@ class QuickEntryNotifier extends StateNotifier<QuickEntryState> {
 
       await prefs.setString(AppConstants.prefLastUsedWalletId, state.selectedWalletId!);
 
+      // Feature 7: Notifikasi anggaran saat mencapai 80%/100%
+      if (state.type == 'EXPENSE') {
+        _checkBudgetAlerts(db, prefs);
+      }
+
       state = state.copyWith(isSaving: false);
       return true;
     } on DataValidationException catch (e) {
@@ -268,6 +285,48 @@ class QuickEntryNotifier extends StateNotifier<QuickEntryState> {
       state = state.copyWith(isSaving: false, errorMessage: 'Gagal menyimpan transaksi. Silakan coba lagi.');
       return false;
     }
+  }
+
+  void _checkBudgetAlerts(AppDatabase db, dynamic prefs) {
+    // Jalankan secara asynchronous tanpa menghambat kembalian UI
+    Future.microtask(() async {
+      try {
+        final alertEnabled = prefs.getBool(AppConstants.prefBudgetAlertEnabled) ?? true;
+        if (!alertEnabled) return;
+
+        // 1. Cek Anggaran Kategori
+        if (state.selectedCategoryId != null) {
+          final cat = await db.getCategoryById(state.selectedCategoryId!);
+          if (cat != null && cat.monthlyBudget != null && cat.monthlyBudget! > 0) {
+            final catSpent = await db.getMonthlyExpenseForCategory(cat.id, state.date);
+            final catPct = (catSpent * 100) ~/ cat.monthlyBudget!;
+            if (catPct >= 80) {
+              await NotificationService().showBudgetAlert(
+                categoryOrGlobal: cat.name,
+                percentage: catPct,
+                current: catSpent,
+                limit: cat.monthlyBudget!,
+              );
+            }
+          }
+        }
+
+        // 2. Cek Anggaran Global
+        final globalBudget = prefs.getInt(AppConstants.prefGlobalMonthlyBudget);
+        if (globalBudget != null && globalBudget > 0) {
+          final totalSpent = await db.getMonthlyTotalExpense(state.date);
+          final globalPct = (totalSpent * 100) ~/ globalBudget;
+          if (globalPct >= 80) {
+            await NotificationService().showBudgetAlert(
+              categoryOrGlobal: 'Keseluruhan',
+              percentage: globalPct,
+              current: totalSpent,
+              limit: globalBudget,
+            );
+          }
+        }
+      } catch (_) {}
+    });
   }
 }
 

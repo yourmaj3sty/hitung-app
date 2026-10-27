@@ -3,7 +3,7 @@ class AppConstants {
   static const String appTagline = 'catat duit, tanpa ribet';
   static const String applicationId = 'id.hitung.app';
   static const String appVersion = '2.0.0';
-  static const int schemaVersion = 2;
+  static const int schemaVersion = 3;
 
   // Formatting & Financial Constraints
   static const String currencySymbol = 'Rp';
@@ -18,4 +18,16 @@ class AppConstants {
   static const String prefLastUsedWalletId = 'last_used_wallet_id';
   static const String prefGlobalMonthlyBudget = 'global_monthly_budget';
   static const String prefSelectedTabFilter = 'selected_tab_filter'; // 'ALL', 'DAILY', 'SAVINGS'
+
+  // New Keys v2.1
+  static const String prefThemeMode = 'app_theme_mode'; // 'system', 'light', 'dark'
+  static const String prefAppPin = 'app_security_pin';
+  static const String prefPinEnabled = 'pin_security_enabled';
+  static const String prefDailyReminderEnabled = 'daily_reminder_enabled';
+  static const String prefDailyReminderHour = 'daily_reminder_hour';
+  static const String prefDailyReminderMinute = 'daily_reminder_minute';
+  static const String prefBudgetAlertEnabled = 'budget_alert_enabled';
+  static const String prefAutoBackupEnabled = 'auto_backup_enabled';
+  static const String prefLastAutoBackupTime = 'last_auto_backup_time';
+  static const String prefPrivacyScreenEnabled = 'privacy_screen_enabled';
 }

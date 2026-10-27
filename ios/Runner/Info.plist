@@ -34,6 +34,10 @@
 	</array>
 	<key>NSFaceIDUsageDescription</key>
 	<string>HITUNG memerlukan Face ID untuk mengamankan data keuangan Anda.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>HITUNG memerlukan akses kamera untuk mengambil foto struk transaksi.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>HITUNG memerlukan akses galeri foto untuk melampirkan foto struk transaksi.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
