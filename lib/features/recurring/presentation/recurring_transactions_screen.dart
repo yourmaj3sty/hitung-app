@@ -13,6 +13,8 @@ import '../../../core/utils/date_formatter.dart';
 import '../../../core/utils/rupiah_input_formatter.dart';
 import '../../../shared/widgets/empty_state.dart';
 
+final _hiddenRecurringIdsProvider = StateProvider<Set<String>>((ref) => const <String>{});
+
 final recurringTransactionsStreamProvider = StreamProvider<List<RecurringTransaction>>((ref) {
   final db = ref.watch(databaseProvider);
   return db.watchRecurringTransactions();
@@ -36,7 +38,17 @@ class RecurringTransactionsScreen extends ConsumerWidget {
             tooltip: 'Proses Transaksi Jatuh Tempo',
             onPressed: () async {
               HapticFeedback.lightImpact();
-              final processedCount = await db.processDueRecurringTransactions();
+              int processedCount;
+              try {
+                processedCount = await db.processDueRecurringTransactions();
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Gagal memproses transaksi berulang.')),
+                  );
+                }
+                return;
+              }
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
@@ -71,6 +83,11 @@ class RecurringTransactionsScreen extends ConsumerWidget {
               ),
             );
           }
+
+          // Sembunyikan jadwal yang baru di-swipe secara sinkron agar Dismissible
+          // langsung keluar dari tree sebelum stream database ter-update.
+          final hidden = ref.watch(_hiddenRecurringIdsProvider);
+          items = items.where((i) => !hidden.contains(i.id)).toList();
 
           return ListView.separated(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -127,8 +144,14 @@ class RecurringTransactionsScreen extends ConsumerWidget {
             ) ??
             false;
       },
-      onDismissed: (_) {
-        db.deleteRecurringTransaction(item.id);
+      onDismissed: (_) async {
+        final hidden = ref.read(_hiddenRecurringIdsProvider.notifier);
+        hidden.state = {...hidden.state, item.id};
+        try {
+          await db.deleteRecurringTransaction(item.id);
+        } catch (_) {
+          hidden.state = {...hidden.state}..remove(item.id);
+        }
       },
       child: Container(
         padding: const EdgeInsets.all(16),
@@ -257,6 +280,17 @@ class _AddRecurringBottomSheetState extends ConsumerState<_AddRecurringBottomShe
   String? _selectedWalletId;
   String? _selectedCategoryId;
   DateTime _nextDueDate = DateTime.now();
+  String? _errorText;
+  bool _isSaving = false;
+
+  /// Ganti tipe sekaligus mengosongkan kategori agar kategori tipe lama tidak terbawa.
+  void _setType(String type) {
+    if (type == _type) return;
+    setState(() {
+      _type = type;
+      _selectedCategoryId = null;
+    });
+  }
 
   @override
   void dispose() {
@@ -274,8 +308,8 @@ class _AddRecurringBottomSheetState extends ConsumerState<_AddRecurringBottomShe
     if (_selectedWalletId == null && wallets.isNotEmpty) {
       _selectedWalletId = wallets.first.id;
     }
-    if (_selectedCategoryId == null && categories.isNotEmpty) {
-      _selectedCategoryId = categories.first.id;
+    if (_selectedCategoryId == null || !categories.any((c) => c.id == _selectedCategoryId)) {
+      _selectedCategoryId = categories.isNotEmpty ? categories.first.id : null;
     }
 
     return Container(
@@ -316,7 +350,7 @@ class _AddRecurringBottomSheetState extends ConsumerState<_AddRecurringBottomShe
               children: [
                 Expanded(
                   child: EmilSpringButton(
-                    onTap: () => setState(() => _type = 'EXPENSE'),
+                    onTap: () => _setType('EXPENSE'),
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
@@ -340,7 +374,7 @@ class _AddRecurringBottomSheetState extends ConsumerState<_AddRecurringBottomShe
                 const SizedBox(width: 12),
                 Expanded(
                   child: EmilSpringButton(
-                    onTap: () => setState(() => _type = 'INCOME'),
+                    onTap: () => _setType('INCOME'),
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
@@ -368,6 +402,7 @@ class _AddRecurringBottomSheetState extends ConsumerState<_AddRecurringBottomShe
             // Nama Jadwal
             TextField(
               controller: _nameController,
+              inputFormatters: [LengthLimitingTextInputFormatter(100)],
               decoration: InputDecoration(
                 labelText: 'Nama Transaksi Berulang',
                 hintText: 'Misal: Langganan Spotify, Gaji Kantor, Wifi',
@@ -422,6 +457,21 @@ class _AddRecurringBottomSheetState extends ConsumerState<_AddRecurringBottomShe
             ),
             const SizedBox(height: 14),
 
+            // Kategori (mengikuti tipe yang dipilih)
+            DropdownButtonFormField<String>(
+              key: ValueKey('recurring_category_$_type'),
+              value: _selectedCategoryId,
+              decoration: InputDecoration(
+                labelText: 'Kategori',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              items: categories.map((c) {
+                return DropdownMenuItem(value: c.id, child: Text(c.name));
+              }).toList(),
+              onChanged: (val) => setState(() => _selectedCategoryId = val),
+            ),
+            const SizedBox(height: 14),
+
             // Tanggal Mulai / Jatuh Tempo
             InkWell(
               onTap: () async {
@@ -446,6 +496,14 @@ class _AddRecurringBottomSheetState extends ConsumerState<_AddRecurringBottomShe
             ),
             const SizedBox(height: 20),
 
+            if (_errorText != null) ...[
+              Text(
+                _errorText!,
+                style: const TextStyle(color: AppColors.coralRed, fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+            ],
+
             // Tombol Simpan
             EmilSpringButton(
               onTap: () async {
@@ -453,14 +511,18 @@ class _AddRecurringBottomSheetState extends ConsumerState<_AddRecurringBottomShe
                 final rawAmount = _amountController.text.replaceAll(RegExp(r'[^0-9]'), '');
                 final amount = int.tryParse(rawAmount) ?? 0;
 
-                if (name.isEmpty || amount <= 0 || _selectedWalletId == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Lengkapi nama, nominal, dan dompet terlebih dahulu.')),
-                  );
+                if (_isSaving) return;
+                if (name.isEmpty || amount <= 0 || _selectedWalletId == null || _selectedCategoryId == null) {
+                  setState(() => _errorText = 'Lengkapi nama, nominal, dompet, dan kategori terlebih dahulu.');
                   return;
                 }
+                setState(() {
+                  _errorText = null;
+                  _isSaving = true;
+                });
 
                 final db = ref.read(databaseProvider);
+                try {
                 await db.insertRecurringTransaction(
                   RecurringTransactionsCompanion(
                     id: drift.Value(const Uuid().v4()),
@@ -475,6 +537,19 @@ class _AddRecurringBottomSheetState extends ConsumerState<_AddRecurringBottomShe
                     createdAt: drift.Value(DateTime.now()),
                   ),
                 );
+                } on DataValidationException catch (e) {
+                  setState(() {
+                    _isSaving = false;
+                    _errorText = e.message;
+                  });
+                  return;
+                } catch (_) {
+                  setState(() {
+                    _isSaving = false;
+                    _errorText = 'Gagal menyimpan jadwal. Silakan coba lagi.';
+                  });
+                  return;
+                }
 
                 if (context.mounted) {
                   Navigator.pop(context);

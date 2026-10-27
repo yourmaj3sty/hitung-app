@@ -1586,6 +1586,12 @@ class $RecurringTransactionsTable extends RecurringTransactions
   late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
       'created_at', aliasedName, false,
       type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _anchorDayMeta =
+      const VerificationMeta('anchorDay');
+  @override
+  late final GeneratedColumn<int> anchorDay = GeneratedColumn<int>(
+      'anchor_day', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -1599,7 +1605,8 @@ class $RecurringTransactionsTable extends RecurringTransactions
         nextDueDate,
         lastGeneratedDate,
         isActive,
-        createdAt
+        createdAt,
+        anchorDay
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1683,6 +1690,10 @@ class $RecurringTransactionsTable extends RecurringTransactions
     } else if (isInserting) {
       context.missing(_createdAtMeta);
     }
+    if (data.containsKey('anchor_day')) {
+      context.handle(_anchorDayMeta,
+          anchorDay.isAcceptableOrUnknown(data['anchor_day']!, _anchorDayMeta));
+    }
     return context;
   }
 
@@ -1716,6 +1727,8 @@ class $RecurringTransactionsTable extends RecurringTransactions
           .read(DriftSqlType.bool, data['${effectivePrefix}is_active'])!,
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+      anchorDay: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}anchor_day']),
     );
   }
 
@@ -1739,6 +1752,10 @@ class RecurringTransaction extends DataClass
   final DateTime? lastGeneratedDate;
   final bool isActive;
   final DateTime createdAt;
+
+  /// Tanggal acuan (1-31) untuk jadwal bulanan, agar jadwal tanggal 31 tidak
+  /// permanen bergeser ke 28 setelah melewati Februari.
+  final int? anchorDay;
   const RecurringTransaction(
       {required this.id,
       required this.name,
@@ -1751,7 +1768,8 @@ class RecurringTransaction extends DataClass
       required this.nextDueDate,
       this.lastGeneratedDate,
       required this.isActive,
-      required this.createdAt});
+      required this.createdAt,
+      this.anchorDay});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -1773,6 +1791,9 @@ class RecurringTransaction extends DataClass
     }
     map['is_active'] = Variable<bool>(isActive);
     map['created_at'] = Variable<DateTime>(createdAt);
+    if (!nullToAbsent || anchorDay != null) {
+      map['anchor_day'] = Variable<int>(anchorDay);
+    }
     return map;
   }
 
@@ -1796,6 +1817,9 @@ class RecurringTransaction extends DataClass
           : Value(lastGeneratedDate),
       isActive: Value(isActive),
       createdAt: Value(createdAt),
+      anchorDay: anchorDay == null && nullToAbsent
+          ? const Value.absent()
+          : Value(anchorDay),
     );
   }
 
@@ -1816,6 +1840,7 @@ class RecurringTransaction extends DataClass
           serializer.fromJson<DateTime?>(json['lastGeneratedDate']),
       isActive: serializer.fromJson<bool>(json['isActive']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      anchorDay: serializer.fromJson<int?>(json['anchorDay']),
     );
   }
   @override
@@ -1834,6 +1859,7 @@ class RecurringTransaction extends DataClass
       'lastGeneratedDate': serializer.toJson<DateTime?>(lastGeneratedDate),
       'isActive': serializer.toJson<bool>(isActive),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'anchorDay': serializer.toJson<int?>(anchorDay),
     };
   }
 
@@ -1849,7 +1875,8 @@ class RecurringTransaction extends DataClass
           DateTime? nextDueDate,
           Value<DateTime?> lastGeneratedDate = const Value.absent(),
           bool? isActive,
-          DateTime? createdAt}) =>
+          DateTime? createdAt,
+          Value<int?> anchorDay = const Value.absent()}) =>
       RecurringTransaction(
         id: id ?? this.id,
         name: name ?? this.name,
@@ -1865,6 +1892,7 @@ class RecurringTransaction extends DataClass
             : this.lastGeneratedDate,
         isActive: isActive ?? this.isActive,
         createdAt: createdAt ?? this.createdAt,
+        anchorDay: anchorDay.present ? anchorDay.value : this.anchorDay,
       );
   RecurringTransaction copyWithCompanion(RecurringTransactionsCompanion data) {
     return RecurringTransaction(
@@ -1885,6 +1913,7 @@ class RecurringTransaction extends DataClass
           : this.lastGeneratedDate,
       isActive: data.isActive.present ? data.isActive.value : this.isActive,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      anchorDay: data.anchorDay.present ? data.anchorDay.value : this.anchorDay,
     );
   }
 
@@ -1902,7 +1931,8 @@ class RecurringTransaction extends DataClass
           ..write('nextDueDate: $nextDueDate, ')
           ..write('lastGeneratedDate: $lastGeneratedDate, ')
           ..write('isActive: $isActive, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('anchorDay: $anchorDay')
           ..write(')'))
         .toString();
   }
@@ -1920,7 +1950,8 @@ class RecurringTransaction extends DataClass
       nextDueDate,
       lastGeneratedDate,
       isActive,
-      createdAt);
+      createdAt,
+      anchorDay);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1936,7 +1967,8 @@ class RecurringTransaction extends DataClass
           other.nextDueDate == this.nextDueDate &&
           other.lastGeneratedDate == this.lastGeneratedDate &&
           other.isActive == this.isActive &&
-          other.createdAt == this.createdAt);
+          other.createdAt == this.createdAt &&
+          other.anchorDay == this.anchorDay);
 }
 
 class RecurringTransactionsCompanion
@@ -1953,6 +1985,7 @@ class RecurringTransactionsCompanion
   final Value<DateTime?> lastGeneratedDate;
   final Value<bool> isActive;
   final Value<DateTime> createdAt;
+  final Value<int?> anchorDay;
   final Value<int> rowid;
   const RecurringTransactionsCompanion({
     this.id = const Value.absent(),
@@ -1967,6 +2000,7 @@ class RecurringTransactionsCompanion
     this.lastGeneratedDate = const Value.absent(),
     this.isActive = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.anchorDay = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   RecurringTransactionsCompanion.insert({
@@ -1982,6 +2016,7 @@ class RecurringTransactionsCompanion
     this.lastGeneratedDate = const Value.absent(),
     this.isActive = const Value.absent(),
     required DateTime createdAt,
+    this.anchorDay = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : id = Value(id),
         name = Value(name),
@@ -2004,6 +2039,7 @@ class RecurringTransactionsCompanion
     Expression<DateTime>? lastGeneratedDate,
     Expression<bool>? isActive,
     Expression<DateTime>? createdAt,
+    Expression<int>? anchorDay,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -2019,6 +2055,7 @@ class RecurringTransactionsCompanion
       if (lastGeneratedDate != null) 'last_generated_date': lastGeneratedDate,
       if (isActive != null) 'is_active': isActive,
       if (createdAt != null) 'created_at': createdAt,
+      if (anchorDay != null) 'anchor_day': anchorDay,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -2036,6 +2073,7 @@ class RecurringTransactionsCompanion
       Value<DateTime?>? lastGeneratedDate,
       Value<bool>? isActive,
       Value<DateTime>? createdAt,
+      Value<int?>? anchorDay,
       Value<int>? rowid}) {
     return RecurringTransactionsCompanion(
       id: id ?? this.id,
@@ -2050,6 +2088,7 @@ class RecurringTransactionsCompanion
       lastGeneratedDate: lastGeneratedDate ?? this.lastGeneratedDate,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
+      anchorDay: anchorDay ?? this.anchorDay,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -2093,6 +2132,9 @@ class RecurringTransactionsCompanion
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (anchorDay.present) {
+      map['anchor_day'] = Variable<int>(anchorDay.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -2114,6 +2156,7 @@ class RecurringTransactionsCompanion
           ..write('lastGeneratedDate: $lastGeneratedDate, ')
           ..write('isActive: $isActive, ')
           ..write('createdAt: $createdAt, ')
+          ..write('anchorDay: $anchorDay, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -2811,6 +2854,7 @@ typedef $$RecurringTransactionsTableCreateCompanionBuilder
   Value<DateTime?> lastGeneratedDate,
   Value<bool> isActive,
   required DateTime createdAt,
+  Value<int?> anchorDay,
   Value<int> rowid,
 });
 typedef $$RecurringTransactionsTableUpdateCompanionBuilder
@@ -2827,6 +2871,7 @@ typedef $$RecurringTransactionsTableUpdateCompanionBuilder
   Value<DateTime?> lastGeneratedDate,
   Value<bool> isActive,
   Value<DateTime> createdAt,
+  Value<int?> anchorDay,
   Value<int> rowid,
 });
 
@@ -2860,6 +2905,7 @@ class $$RecurringTransactionsTableTableManager extends RootTableManager<
             Value<DateTime?> lastGeneratedDate = const Value.absent(),
             Value<bool> isActive = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
+            Value<int?> anchorDay = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               RecurringTransactionsCompanion(
@@ -2875,6 +2921,7 @@ class $$RecurringTransactionsTableTableManager extends RootTableManager<
             lastGeneratedDate: lastGeneratedDate,
             isActive: isActive,
             createdAt: createdAt,
+            anchorDay: anchorDay,
             rowid: rowid,
           ),
           createCompanionCallback: ({
@@ -2890,6 +2937,7 @@ class $$RecurringTransactionsTableTableManager extends RootTableManager<
             Value<DateTime?> lastGeneratedDate = const Value.absent(),
             Value<bool> isActive = const Value.absent(),
             required DateTime createdAt,
+            Value<int?> anchorDay = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               RecurringTransactionsCompanion.insert(
@@ -2905,6 +2953,7 @@ class $$RecurringTransactionsTableTableManager extends RootTableManager<
             lastGeneratedDate: lastGeneratedDate,
             isActive: isActive,
             createdAt: createdAt,
+            anchorDay: anchorDay,
             rowid: rowid,
           ),
         ));
@@ -2955,6 +3004,11 @@ class $$RecurringTransactionsTableFilterComposer
 
   ColumnFilters<DateTime> get createdAt => $state.composableBuilder(
       column: $state.table.createdAt,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<int> get anchorDay => $state.composableBuilder(
+      column: $state.table.anchorDay,
       builder: (column, joinBuilders) =>
           ColumnFilters(column, joinBuilders: joinBuilders));
 
@@ -3040,6 +3094,11 @@ class $$RecurringTransactionsTableOrderingComposer
 
   ColumnOrderings<DateTime> get createdAt => $state.composableBuilder(
       column: $state.table.createdAt,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<int> get anchorDay => $state.composableBuilder(
+      column: $state.table.anchorDay,
       builder: (column, joinBuilders) =>
           ColumnOrderings(column, joinBuilders: joinBuilders));
 

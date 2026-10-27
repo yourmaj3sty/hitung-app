@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,10 +30,35 @@ class _TransactionSearchScreenState extends ConsumerState<TransactionSearchScree
   DateTime? _endDate;
   String _dateRangeLabel = 'Semua Waktu';
 
+  /// ID transaksi yang baru di-swipe hapus; disembunyikan sinkron agar Dismissible
+  /// langsung keluar dari tree sebelum stream database ter-update.
+  final Set<String> _hiddenIds = {};
+  Timer? _debounce;
+  Stream<List<TransactionItem>>? _stream;
+  String? _streamKey;
+
   @override
   void dispose() {
+    _debounce?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  /// Membuat stream hanya bila filter berubah, bukan di setiap rebuild.
+  Stream<List<TransactionItem>> _searchStream(AppDatabase db) {
+    final key = [_queryText.trim(), _selectedType, _selectedWalletId, _selectedCategoryId, _startDate, _endDate].join('|');
+    if (_stream == null || key != _streamKey) {
+      _streamKey = key;
+      _stream = db.watchFilteredTransactions(
+        queryText: _queryText.trim().isEmpty ? null : _queryText.trim(),
+        type: _selectedType == 'ALL' ? null : _selectedType,
+        walletId: _selectedWalletId,
+        categoryId: _selectedCategoryId,
+        startDate: _startDate,
+        endDate: _endDate,
+      );
+    }
+    return _stream!;
   }
 
   void _setDatePreset(String label, DateTime? start, DateTime? end) {
@@ -75,14 +101,7 @@ class _TransactionSearchScreenState extends ConsumerState<TransactionSearchScree
     final categories = categoriesAsync.value ?? [];
 
     // Stream transaksi berdasarkan filter aktif
-    final searchStream = db.watchFilteredTransactions(
-      queryText: _queryText.trim().isEmpty ? null : _queryText.trim(),
-      type: _selectedType == 'ALL' ? null : _selectedType,
-      walletId: _selectedWalletId,
-      categoryId: _selectedCategoryId,
-      startDate: _startDate,
-      endDate: _endDate,
-    );
+    final searchStream = _searchStream(db);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -92,7 +111,11 @@ class _TransactionSearchScreenState extends ConsumerState<TransactionSearchScree
           autofocus: true,
           style: const TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600),
           onChanged: (val) {
-            setState(() => _queryText = val);
+            // Tunggu jeda ketik 300 ms sebelum menjalankan pencarian.
+            _debounce?.cancel();
+            _debounce = Timer(const Duration(milliseconds: 300), () {
+              if (mounted) setState(() => _queryText = val);
+            });
           },
           decoration: InputDecoration(
             hintText: 'Cari catatan, kategori, dompet...',
@@ -310,7 +333,7 @@ class _TransactionSearchScreenState extends ConsumerState<TransactionSearchScree
                   return const Center(child: CircularProgressIndicator(color: AppColors.gopayBlue));
                 }
 
-                final items = snapshot.data!;
+                final items = snapshot.data!.where((i) => !_hiddenIds.contains(i.transaction.id)).toList();
                 if (items.isEmpty) {
                   return const EmptyStateWidget(
                     title: 'Tidak Ada Transaksi',
@@ -396,19 +419,38 @@ class _TransactionSearchScreenState extends ConsumerState<TransactionSearchScree
                               child: const Icon(LucideIcons.trash2, color: Colors.white, size: 20),
                             ),
                             onDismissed: (_) async {
-                              await db.deleteTransactionWithRevert(tx.id);
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: const Text('Transaksi dihapus'),
-                                    action: SnackBarAction(
-                                      label: 'Urungkan',
-                                      textColor: AppColors.neonLime,
-                                      onPressed: () => db.restoreTransaction(tx),
-                                    ),
-                                  ),
-                                );
+                              final messenger = ScaffoldMessenger.of(context);
+                              setState(() => _hiddenIds.add(tx.id));
+                              Transaction? deleted;
+                              try {
+                                deleted = await db.deleteTransactionWithRevert(tx.id);
+                              } catch (_) {
+                                if (mounted) setState(() => _hiddenIds.remove(tx.id));
+                                messenger.showSnackBar(const SnackBar(content: Text('Gagal menghapus transaksi.')));
+                                return;
                               }
+                              if (deleted == null) return;
+                              final toRestore = deleted;
+                              messenger.clearSnackBars();
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  content: const Text('Transaksi dihapus'),
+                                  action: SnackBarAction(
+                                    label: 'Urungkan',
+                                    textColor: AppColors.neonLime,
+                                    onPressed: () async {
+                                      try {
+                                        await db.restoreTransaction(toRestore);
+                                      } catch (_) {
+                                        messenger.showSnackBar(
+                                          const SnackBar(content: Text('Transaksi tidak bisa dipulihkan.')),
+                                        );
+                                      }
+                                      if (mounted) setState(() => _hiddenIds.remove(toRestore.id));
+                                    },
+                                  ),
+                                ),
+                              );
                             },
                             child: Material(
                               color: AppColors.surface,

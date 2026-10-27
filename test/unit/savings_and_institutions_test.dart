@@ -91,7 +91,7 @@ void main() {
       ));
 
       final exported = await db.exportDatabaseJson();
-      expect(exported['schemaVersion'], 3);
+      expect(exported['schemaVersion'], 4);
 
       final walletsList = exported['wallets'] as List;
       expect(walletsList.length, 1);

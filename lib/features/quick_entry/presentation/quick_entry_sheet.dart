@@ -60,25 +60,46 @@ class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet> {
   bool _defaultsInitialized = false;
   bool _isSuccess = false;
 
+  /// Foto struk yang disalin selama sheet ini terbuka. Yang tidak jadi dipakai dihapus
+  /// agar tidak menumpuk file yatim di penyimpanan.
+  final List<String> _sessionReceipts = [];
+  String? _savedReceipt;
+
   @override
   void dispose() {
     _noteController.dispose();
+    _cleanupReceipts();
     super.dispose();
   }
 
+  void _cleanupReceipts() {
+    final storage = ReceiptStorageService();
+    for (final path in _sessionReceipts) {
+      if (path != _savedReceipt) storage.deleteReceipt(path);
+    }
+    // Saat edit, struk lama yang diganti/dihapus ikut dibersihkan setelah tersimpan.
+    final original = widget.editTransaction?.receiptPath;
+    if (_isSuccess && original != null && original != _savedReceipt) {
+      storage.deleteReceipt(original);
+    }
+  }
+
   Future<void> _pickReceipt(ImageSource source) async {
+    final notifier = ref.read(quickEntryProvider.notifier);
     try {
       final picker = ImagePicker();
-      final picked = await picker.pickImage(source: source, imageQuality: 80);
+      // Batasi resolusi agar ukuran file wajar (struk tetap terbaca).
+      final picked = await picker.pickImage(source: source, imageQuality: 80, maxWidth: 1600, maxHeight: 1600);
       if (picked != null) {
         final savedPath = await ReceiptStorageService().saveReceipt(picked.path);
-        ref.read(quickEntryProvider.notifier).setReceiptPath(savedPath);
+        _sessionReceipts.add(savedPath);
+        notifier.setReceiptPath(savedPath);
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal mengambil foto: $e')),
-        );
+        notifier.setError(source == ImageSource.camera
+            ? 'Kamera tidak bisa dibuka. Periksa izin kamera atau pilih dari galeri.'
+            : 'Gagal mengambil foto dari galeri.');
       }
     }
   }
@@ -563,8 +584,10 @@ class _QuickEntrySheetState extends ConsumerState<QuickEntrySheet> {
                         ? () async {
                             final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
                             HapticFeedback.mediumImpact();
+                            final receiptAtSave = state.receiptPath;
                             final success = await notifier.saveTransaction();
                             if (success && mounted) {
+                              _savedReceipt = receiptAtSave;
                               setState(() => _isSuccess = true);
                               HapticFeedback.lightImpact();
                               await Future.delayed(Duration(milliseconds: reduceMotion ? 100 : 320));

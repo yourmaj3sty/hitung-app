@@ -76,6 +76,9 @@ class RecurringTransactions extends Table {
   DateTimeColumn get lastGeneratedDate => dateTime().nullable()();
   BoolColumn get isActive => boolean().withDefault(const Constant(true))();
   DateTimeColumn get createdAt => dateTime()();
+  /// Tanggal acuan (1-31) untuk jadwal bulanan, agar jadwal tanggal 31 tidak
+  /// permanen bergeser ke 28 setelah melewati Februari.
+  IntColumn get anchorDay => integer().nullable()();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -101,7 +104,7 @@ class DbEnums {
   static const transactionTypes = {'EXPENSE', 'INCOME', 'TRANSFER'};
   static const categoryTypes = {'EXPENSE', 'INCOME'};
   static const walletTypes = {'BANK', 'E_WALLET', 'SAVINGS', 'CASH'};
-  static const recurringFrequencies = {'DAILY', 'WEEKLY', 'MONTHLY'};
+  static const recurringFrequencies = {'DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'};
   static const nameMaxLength = AppConstants.maxNameLength;
 }
 
@@ -110,7 +113,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? e]) : super(e ?? _openConnection());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -127,7 +130,10 @@ class AppDatabase extends _$AppDatabase {
           if (from < 3) {
             // Migrasi aman v2 -> v3: tambah kolom receiptPath & tabel recurringTransactions
             await m.addColumn(transactions, transactions.receiptPath);
-            await m.createTable(recurringTransactions);
+            await m.createTable(recurringTransactions); // sudah memuat kolom anchorDay
+          }
+          if (from == 3) {
+            await m.addColumn(recurringTransactions, recurringTransactions.anchorDay);
           }
         },
         beforeOpen: (details) async {
@@ -525,7 +531,9 @@ class AppDatabase extends _$AppDatabase {
       query.where(transactions.transactionDate.isBiggerOrEqualValue(startDate));
     }
     if (endDate != null) {
-      query.where(transactions.transactionDate.isSmallerOrEqualValue(endDate));
+      // endDate dianggap inklusif sampai akhir harinya.
+      final endExclusive = DateTime(endDate.year, endDate.month, endDate.day + 1);
+      query.where(transactions.transactionDate.isSmallerThanValue(endExclusive));
     }
     if (type != null && type.isNotEmpty && type != 'ALL') {
       query.where(transactions.type.equals(type));
@@ -537,11 +545,13 @@ class AppDatabase extends _$AppDatabase {
       query.where(transactions.categoryId.equals(categoryId));
     }
     if (queryText != null && queryText.trim().isNotEmpty) {
-      final q = '%${queryText.trim().toLowerCase()}%';
+      // instr() dipakai alih-alih LIKE agar karakter % dan _ yang diketik pengguna
+      // diperlakukan sebagai teks biasa, bukan wildcard.
+      final q = Variable.withString(queryText.trim().toLowerCase());
+      Expression<bool> hit(Expression<String> col) =>
+          FunctionCallExpression<int>('instr', [col.lower(), q]).isBiggerThanValue(0);
       query.where(
-        transactions.note.lower().like(q) |
-        categories.name.lower().like(q) |
-        wallets.name.lower().like(q),
+        hit(transactions.note) | hit(categories.name) | hit(wallets.name) | hit(toWallets.name),
       );
     }
 
@@ -576,8 +586,28 @@ class AppDatabase extends _$AppDatabase {
         .get();
   }
 
-  Future<int> insertRecurringTransaction(RecurringTransactionsCompanion rec) {
-    return into(recurringTransactions).insert(rec);
+  /// Memvalidasi jadwal berulang. Melempar [DataValidationException].
+  Future<void> validateRecurring(RecurringTransactionsCompanion rec) async {
+    final name = rec.name.present ? rec.name.value.trim() : '';
+    if (name.isEmpty || name.length > 100) {
+      throw const DataValidationException('Nama jadwal wajib diisi (maksimal 100 karakter).');
+    }
+    await _validateTransaction(TransactionsCompanion(
+      amount: rec.amount,
+      type: rec.type,
+      walletId: rec.walletId,
+      toWalletId: rec.toWalletId,
+      categoryId: rec.categoryId,
+    ));
+    if (!rec.frequency.present || !DbEnums.recurringFrequencies.contains(rec.frequency.value)) {
+      throw const DataValidationException('Frekuensi jadwal tidak valid.');
+    }
+  }
+
+  Future<int> insertRecurringTransaction(RecurringTransactionsCompanion rec) async {
+    await validateRecurring(rec);
+    final withAnchor = rec.anchorDay.present ? rec : rec.copyWith(anchorDay: Value(rec.nextDueDate.value.day));
+    return into(recurringTransactions).insert(withAnchor);
   }
 
   Future<bool> updateRecurringTransaction(RecurringTransactionsCompanion rec) {
@@ -594,57 +624,76 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Memproses transaksi berulang yang jatuh tempo secara otomatis (Feature 6).
-  Future<int> processDueRecurringTransactions() {
-    return transaction(() async {
-      final now = DateTime.now();
-      final dueItems = await (select(recurringTransactions)
-            ..where((t) => t.isActive.equals(true) & t.nextDueDate.isSmallerOrEqualValue(now)))
-          .get();
+  /// Tanggal kemunculan berikutnya. Untuk bulanan, [anchorDay] dipakai sebagai acuan
+  /// sehingga 31 Jan -> 28 Feb -> 31 Mar -> 30 Apr (tidak terjebak di tanggal 28).
+  static DateTime nextOccurrence(DateTime current, String frequency, int anchorDay) {
+    switch (frequency) {
+      case 'DAILY':
+        return DateTime(current.year, current.month, current.day + 1, current.hour, current.minute);
+      case 'WEEKLY':
+        return DateTime(current.year, current.month, current.day + 7, current.hour, current.minute);
+      case 'YEARLY':
+        final daysInMonth = DateTime(current.year + 1, current.month + 1, 0).day;
+        final day = anchorDay > daysInMonth ? daysInMonth : anchorDay;
+        return DateTime(current.year + 1, current.month, day, current.hour, current.minute);
+      default: // MONTHLY
+        final daysInNext = DateTime(current.year, current.month + 2, 0).day;
+        final day = anchorDay > daysInNext ? daysInNext : anchorDay;
+        return DateTime(current.year, current.month + 1, day, current.hour, current.minute);
+    }
+  }
 
-      int count = 0;
-      for (final item in dueItems) {
-        await createTransaction(TransactionsCompanion(
-          id: Value('rec_tx_${const Uuid().v4()}'),
-          walletId: Value(item.walletId),
-          toWalletId: Value(item.toWalletId),
-          categoryId: Value(item.categoryId),
-          amount: Value(item.amount),
-          type: Value(item.type),
-          note: Value('${item.name} (Otomatis: ${item.frequency.toLowerCase()})'),
-          transactionDate: Value(item.nextDueDate),
-          createdAt: Value(now),
-        ));
+  /// Batas pembuatan transaksi susulan per jadwal dalam sekali proses.
+  static const int maxCatchUpPerSchedule = 400;
 
-        DateTime nextDate;
-        if (item.frequency == 'DAILY') {
-          nextDate = item.nextDueDate.add(const Duration(days: 1));
-        } else if (item.frequency == 'WEEKLY') {
-          nextDate = item.nextDueDate.add(const Duration(days: 7));
-        } else {
-          // MONTHLY
-          final current = item.nextDueDate;
-          int nextMonth = current.month + 1;
-          int nextYear = current.year;
-          if (nextMonth > 12) {
-            nextMonth = 1;
-            nextYear++;
+  /// Memproses transaksi berulang yang jatuh tempo (Feature 6).
+  /// - Semua kemunculan yang terlewat dibuat (mis. 3 bulan tidak membuka aplikasi -> 3 transaksi).
+  /// - Setiap jadwal diproses dalam transaksinya sendiri. Jadwal yang tidak valid
+  ///   (mis. kategori tidak cocok) dinonaktifkan agar tidak memblokir jadwal lain.
+  Future<int> processDueRecurringTransactions({DateTime? now}) async {
+    final reference = now ?? DateTime.now();
+    final dueItems = await (select(recurringTransactions)
+          ..where((t) => t.isActive.equals(true) & t.nextDueDate.isSmallerOrEqualValue(reference)))
+        .get();
+
+    var count = 0;
+    for (final item in dueItems) {
+      final anchor = item.anchorDay ?? item.nextDueDate.day;
+      try {
+        count += await transaction(() async {
+          var next = item.nextDueDate;
+          var made = 0;
+          while (!next.isAfter(reference) && made < maxCatchUpPerSchedule) {
+            await createTransaction(TransactionsCompanion(
+              id: Value('rec_tx_${const Uuid().v4()}'),
+              walletId: Value(item.walletId),
+              toWalletId: Value(item.toWalletId),
+              categoryId: Value(item.categoryId),
+              amount: Value(item.amount),
+              type: Value(item.type),
+              note: Value('${item.name} (Otomatis)'),
+              transactionDate: Value(next),
+              createdAt: Value(reference),
+            ));
+            next = nextOccurrence(next, item.frequency, anchor);
+            made++;
           }
-          final daysInNextMonth = DateTime(nextYear, nextMonth + 1, 0).day;
-          final targetDay = current.day > daysInNextMonth ? daysInNextMonth : current.day;
-          nextDate = DateTime(nextYear, nextMonth, targetDay, current.hour, current.minute);
-        }
-
-        await (update(recurringTransactions)..where((t) => t.id.equals(item.id))).write(
-          RecurringTransactionsCompanion(
-            nextDueDate: Value(nextDate),
-            lastGeneratedDate: Value(now),
-          ),
-        );
-        count++;
+          await (update(recurringTransactions)..where((t) => t.id.equals(item.id))).write(
+            RecurringTransactionsCompanion(
+              nextDueDate: Value(next),
+              lastGeneratedDate: Value(reference),
+              anchorDay: Value(anchor),
+            ),
+          );
+          return made;
+        });
+      } on DataValidationException {
+        await toggleRecurringActive(item.id, false);
+      } on SqliteException {
+        await toggleRecurringActive(item.id, false);
       }
-      return count;
-    });
+    }
+    return count;
   }
 
   // --- SEEDING & ONBOARDING HELPER (FR-01 & v2.0) ---
@@ -719,6 +768,7 @@ class AppDatabase extends _$AppDatabase {
     final allWallets = await select(wallets).get();
     final allCategories = await select(categories).get();
     final allTransactions = await select(transactions).get();
+    final allRecurring = await select(recurringTransactions).get();
 
     return {
       'schemaVersion': schemaVersion,
@@ -764,6 +814,23 @@ class AppDatabase extends _$AppDatabase {
                 'receiptPath': t.receiptPath,
               })
           .toList(),
+      'recurringTransactions': allRecurring
+          .map((r) => {
+                'id': r.id,
+                'name': r.name,
+                'amount': r.amount,
+                'type': r.type,
+                'walletId': r.walletId,
+                'toWalletId': r.toWalletId,
+                'categoryId': r.categoryId,
+                'frequency': r.frequency,
+                'nextDueDate': r.nextDueDate.toIso8601String(),
+                'lastGeneratedDate': r.lastGeneratedDate?.toIso8601String(),
+                'isActive': r.isActive,
+                'createdAt': r.createdAt.toIso8601String(),
+                'anchorDay': r.anchorDay,
+              })
+          .toList(),
     };
   }
 
@@ -775,6 +842,8 @@ class AppDatabase extends _$AppDatabase {
     final parsed = BackupParser.parse(data);
 
     await transaction(() async {
+      // Jadwal berulang merujuk dompet & kategori, jadi harus dihapus lebih dulu.
+      await delete(recurringTransactions).go();
       await delete(transactions).go();
       await delete(categories).go();
       await delete(wallets).go();
@@ -783,6 +852,7 @@ class AppDatabase extends _$AppDatabase {
         b.insertAll(wallets, parsed.wallets);
         b.insertAll(categories, parsed.categories);
         b.insertAll(transactions, parsed.transactions);
+        b.insertAll(recurringTransactions, parsed.recurring);
       });
     });
   }
@@ -793,8 +863,9 @@ class ParsedBackup {
   final List<WalletsCompanion> wallets;
   final List<CategoriesCompanion> categories;
   final List<TransactionsCompanion> transactions;
+  final List<RecurringTransactionsCompanion> recurring;
 
-  const ParsedBackup(this.wallets, this.categories, this.transactions);
+  const ParsedBackup(this.wallets, this.categories, this.transactions, [this.recurring = const []]);
 }
 
 /// Mengubah JSON cadangan menjadi baris database yang valid.
@@ -922,7 +993,55 @@ class BackupParser {
       ));
     });
 
-    return ParsedBackup(walletCompanions, categoryCompanions, transactionCompanions);
+    // --- Transaksi berulang (opsional; cadangan lama belum memilikinya) ---
+    final recurringIds = <String>{};
+    final recurringCompanions = <RecurringTransactionsCompanion>[];
+    final rawRecurring = _list(data, 'recurringTransactions');
+    for (var i = 0; i < rawRecurring.length; i++) {
+      final ctx = 'jadwal berulang #${i + 1}';
+      final r = _map(rawRecurring[i], ctx);
+      final id = _requiredString(r, 'id', ctx);
+      if (!recurringIds.add(id)) throw DataValidationException('ID jadwal "$id" muncul lebih dari sekali.');
+      final name = _requiredString(r, 'name', ctx).trim();
+      if (name.length > 100) throw DataValidationException('Nama $ctx melebihi 100 karakter.');
+      final type = _requiredString(r, 'type', ctx);
+      if (!DbEnums.transactionTypes.contains(type)) throw DataValidationException('Tipe $ctx tidak valid.');
+      final frequency = _requiredString(r, 'frequency', ctx);
+      if (!DbEnums.recurringFrequencies.contains(frequency)) {
+        throw DataValidationException('Frekuensi $ctx tidak valid.');
+      }
+      final amount = _int(r, 'amount', ctx);
+      if (amount <= 0) throw DataValidationException('Nominal $ctx harus lebih dari 0.');
+      final walletId = _requiredString(r, 'walletId', ctx);
+      if (!walletRows.containsKey(walletId)) throw DataValidationException('$ctx merujuk dompet yang tidak ada.');
+      final toWalletId = _string(r, 'toWalletId', ctx);
+      if (type == 'TRANSFER' && (toWalletId == null || !walletRows.containsKey(toWalletId) || toWalletId == walletId)) {
+        throw DataValidationException('$ctx (transfer) memiliki dompet tujuan yang tidak valid.');
+      }
+      final categoryId = _string(r, 'categoryId', ctx);
+      if (categoryId != null && !categoryIds.contains(categoryId)) {
+        throw DataValidationException('$ctx merujuk kategori yang tidak ada.');
+      }
+      final anchor = _optionalInt(r, 'anchorDay', ctx);
+      final lastGenerated = _string(r, 'lastGeneratedDate', ctx);
+      recurringCompanions.add(RecurringTransactionsCompanion(
+        id: Value(id),
+        name: Value(name),
+        amount: Value(amount),
+        type: Value(type),
+        walletId: Value(walletId),
+        toWalletId: Value(type == 'TRANSFER' ? toWalletId : null),
+        categoryId: Value(type == 'TRANSFER' ? null : categoryId),
+        frequency: Value(frequency),
+        nextDueDate: Value(_date(r, 'nextDueDate', ctx)),
+        lastGeneratedDate: Value(lastGenerated == null ? null : _date(r, 'lastGeneratedDate', ctx)),
+        isActive: Value(r['isActive'] == null ? true : _bool(r, 'isActive', ctx)),
+        createdAt: Value(_date(r, 'createdAt', ctx)),
+        anchorDay: Value(anchor != null && anchor >= 1 && anchor <= 31 ? anchor : null),
+      ));
+    }
+
+    return ParsedBackup(walletCompanions, categoryCompanions, transactionCompanions, recurringCompanions);
   }
 
   // --- Helper pembaca field ---

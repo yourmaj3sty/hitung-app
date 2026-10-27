@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/database/app_database.dart';
 import 'encryption_service.dart';
@@ -19,9 +20,10 @@ class JsonBackupService {
       final data = await db.exportDatabaseJson();
       String outputString = const JsonEncoder.withIndent('  ').convert(data);
 
-      final isEncrypted = password != null && password.trim().isNotEmpty;
+      // Kata sandi dipakai persis seperti diketik (tidak di-trim), sama seperti saat dekripsi.
+      final isEncrypted = password != null && password.isNotEmpty;
       if (isEncrypted) {
-        outputString = EncryptionService.encrypt(outputString, password.trim());
+        outputString = await EncryptionService.encryptAsync(outputString, password);
       }
 
       final tempDir = await getTemporaryDirectory();
@@ -84,6 +86,37 @@ class JsonBackupService {
     }
   }
 
+  /// Menjalankan backup otomatis bila diaktifkan dan backup terakhir sudah lebih dari 24 jam.
+  /// Mengembalikan file backup yang dibuat, atau null bila tidak perlu/ gagal.
+  Future<File?> runScheduledAutoBackup(SharedPreferences prefs, {DateTime? now}) async {
+    if (!(prefs.getBool(AppConstants.prefAutoBackupEnabled) ?? false)) return null;
+    final current = now ?? DateTime.now();
+    final lastMs = prefs.getInt(AppConstants.prefLastAutoBackupTime) ?? 0;
+    if (current.difference(DateTime.fromMillisecondsSinceEpoch(lastMs)) < const Duration(hours: 24)) {
+      return null;
+    }
+    final file = await performAutoBackup();
+    if (file != null) {
+      await prefs.setInt(AppConstants.prefLastAutoBackupTime, current.millisecondsSinceEpoch);
+    }
+    return file;
+  }
+
+  /// Menghapus file lama dengan awalan [prefix] di folder backup, menyisakan [keep] terbaru.
+  static void _rotate(Directory dir, String prefix, int keep) {
+    final files = dir
+        .listSync()
+        .whereType<File>()
+        .where((f) => f.uri.pathSegments.last.startsWith(prefix))
+        .toList()
+      ..sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+    for (var i = keep; i < files.length; i++) {
+      try {
+        files[i].deleteSync();
+      } catch (_) {}
+    }
+  }
+
   /// Membuat snapshot sebelum restore dijalankan (Feature 5)
   Future<File?> performPreRestoreBackup() async {
     try {
@@ -98,6 +131,7 @@ class JsonBackupService {
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final file = File('${backupDir.path}/pre_restore_snapshot_$timestamp.json');
       await file.writeAsString(jsonString);
+      _rotate(backupDir, 'pre_restore_snapshot_', 3);
       return file;
     } catch (_) {
       return null;
@@ -166,7 +200,7 @@ class JsonBackupService {
       }
 
       try {
-        actualJson = EncryptionService.decrypt(content, password);
+        actualJson = await EncryptionService.decryptAsync(content, password);
       } on FormatException catch (e) {
         return e.message;
       } catch (_) {

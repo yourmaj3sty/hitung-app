@@ -3,7 +3,7 @@ class AppConstants {
   static const String appTagline = 'catat duit, tanpa ribet';
   static const String applicationId = 'id.hitung.app';
   static const String appVersion = '2.0.0';
-  static const int schemaVersion = 3;
+  static const int schemaVersion = 4;
 
   // Formatting & Financial Constraints
   static const String currencySymbol = 'Rp';
@@ -23,6 +23,8 @@ class AppConstants {
   static const String prefThemeMode = 'app_theme_mode'; // 'system', 'light', 'dark'
   static const String prefAppPin = 'app_security_pin';
   static const String prefPinEnabled = 'pin_security_enabled';
+  static const String prefPinFailedCount = 'pin_failed_count';
+  static const String prefPinLockedUntil = 'pin_locked_until_ms';
   static const String prefDailyReminderEnabled = 'daily_reminder_enabled';
   static const String prefDailyReminderHour = 'daily_reminder_hour';
   static const String prefDailyReminderMinute = 'daily_reminder_minute';

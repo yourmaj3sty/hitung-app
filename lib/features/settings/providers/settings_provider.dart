@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'dart:math';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/error_codes.dart' as auth_error;
 import 'package:local_auth/local_auth.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/services/privacy_guard.dart';
 import '../../onboarding/providers/onboarding_provider.dart';
 
 final localAuthProvider = Provider<LocalAuthentication>((ref) {
@@ -72,12 +76,26 @@ class SettingsController extends StateNotifier<AsyncValue<void>> {
     final prefs = _ref.read(sharedPreferencesProvider);
     await prefs.setBool(AppConstants.prefPrivacyScreenEnabled, enabled);
     _ref.read(isPrivacyScreenEnabledProvider.notifier).state = enabled;
+    await PrivacyGuard.setSecure(enabled);
   }
 
+  static final RegExp _pinPattern = RegExp(r'^[0-9]{4,6}$');
+  static const int _freeAttempts = 5;
+
+  /// PIN disimpan sebagai hash SHA-256 bergaram dengan format `v1$<salt>$<hash>`.
+  static String hashPin(String pin, String salt) => sha256.convert(utf8.encode('$salt:$pin')).toString();
+
+  static bool isValidPin(String pin) => _pinPattern.hasMatch(pin);
+
   Future<void> setAppPin(String pin) async {
+    if (!isValidPin(pin)) throw ArgumentError('PIN harus 4-6 angka.');
     final prefs = _ref.read(sharedPreferencesProvider);
-    await prefs.setString(AppConstants.prefAppPin, pin);
+    final random = Random.secure();
+    final salt = List.generate(16, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+    await prefs.setString(AppConstants.prefAppPin, 'v1\$$salt\$${hashPin(pin, salt)}');
     await prefs.setBool(AppConstants.prefPinEnabled, true);
+    await prefs.remove(AppConstants.prefPinFailedCount);
+    await prefs.remove(AppConstants.prefPinLockedUntil);
     _ref.read(isPinEnabledProvider.notifier).state = true;
   }
 
@@ -88,14 +106,47 @@ class SettingsController extends StateNotifier<AsyncValue<void>> {
     _ref.read(isPinEnabledProvider.notifier).state = false;
   }
 
-  bool verifyAppPin(String enteredPin) {
+  /// Memverifikasi PIN dengan batas percobaan: setelah 5 kali salah, input dikunci
+  /// 30 detik dan durasinya berlipat ganda setiap kesalahan berikutnya (maks. 15 menit).
+  Future<PinCheckResult> verifyAppPin(String enteredPin, {DateTime? now}) async {
     final prefs = _ref.read(sharedPreferencesProvider);
-    final savedPin = prefs.getString(AppConstants.prefAppPin);
-    if (savedPin != null && savedPin == enteredPin) {
-      _ref.read(isAppLockedProvider.notifier).state = false;
-      return true;
+    final current = now ?? DateTime.now();
+
+    final lockedUntilMs = prefs.getInt(AppConstants.prefPinLockedUntil) ?? 0;
+    final lockedUntil = DateTime.fromMillisecondsSinceEpoch(lockedUntilMs);
+    if (current.isBefore(lockedUntil)) {
+      return PinCheckResult.locked(lockedUntil.difference(current));
     }
-    return false;
+
+    final saved = prefs.getString(AppConstants.prefAppPin);
+    if (saved == null) return const PinCheckResult.wrong(0);
+
+    bool ok;
+    if (saved.startsWith('v1\$')) {
+      final parts = saved.split('\$');
+      ok = parts.length == 3 && hashPin(enteredPin, parts[1]) == parts[2];
+    } else {
+      // PIN lama tersimpan sebagai teks biasa: cocokkan lalu ubah menjadi hash.
+      ok = saved == enteredPin;
+      if (ok && isValidPin(enteredPin)) await setAppPin(enteredPin);
+    }
+
+    if (ok) {
+      await prefs.remove(AppConstants.prefPinFailedCount);
+      await prefs.remove(AppConstants.prefPinLockedUntil);
+      _ref.read(isAppLockedProvider.notifier).state = false;
+      return const PinCheckResult.success();
+    }
+
+    final failed = (prefs.getInt(AppConstants.prefPinFailedCount) ?? 0) + 1;
+    await prefs.setInt(AppConstants.prefPinFailedCount, failed);
+    if (failed >= _freeAttempts) {
+      final factor = 1 << (failed - _freeAttempts).clamp(0, 5); // 30 dtk .. 16 mnt
+      final lock = Duration(seconds: min(30 * factor, 15 * 60));
+      await prefs.setInt(AppConstants.prefPinLockedUntil, current.add(lock).millisecondsSinceEpoch);
+      return PinCheckResult.locked(lock);
+    }
+    return PinCheckResult.wrong(_freeAttempts - failed);
   }
 
   Future<bool> toggleBiometric(bool enabled) async {
@@ -154,7 +205,10 @@ class SettingsController extends StateNotifier<AsyncValue<void>> {
           e.code == auth_error.passcodeNotSet) {
         await _ref.read(sharedPreferencesProvider).setBool(AppConstants.prefBiometricEnabled, false);
         _ref.read(isBiometricEnabledProvider.notifier).state = false;
-        _ref.read(isAppLockedProvider.notifier).state = false;
+        // Jika PIN aplikasi aktif, aplikasi TETAP terkunci dan harus dibuka dengan PIN.
+        if (!_ref.read(isPinEnabledProvider)) {
+          _ref.read(isAppLockedProvider.notifier).state = false;
+        }
         return UnlockResult.unavailable;
       }
       if (e.code == auth_error.lockedOut || e.code == auth_error.permanentlyLockedOut) {
@@ -171,6 +225,28 @@ class SettingsController extends StateNotifier<AsyncValue<void>> {
 }
 
 enum UnlockResult { success, failed, lockedOut, unavailable }
+
+/// Hasil verifikasi PIN.
+class PinCheckResult {
+  final bool success;
+  /// Sisa percobaan sebelum input dikunci sementara.
+  final int remainingAttempts;
+  /// Lama penguncian bila terlalu banyak percobaan salah.
+  final Duration? lockedFor;
+
+  const PinCheckResult.success()
+      : success = true,
+        remainingAttempts = 0,
+        lockedFor = null;
+  const PinCheckResult.wrong(this.remainingAttempts)
+      : success = false,
+        lockedFor = null;
+  const PinCheckResult.locked(Duration this.lockedFor)
+      : success = false,
+        remainingAttempts = 0;
+
+  bool get isLocked => lockedFor != null;
+}
 
 final settingsControllerProvider = StateNotifierProvider<SettingsController, AsyncValue<void>>((ref) {
   return SettingsController(ref);

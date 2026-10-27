@@ -45,14 +45,22 @@ class AnalyticsScreen extends ConsumerWidget {
               final expenseCats = ref.read(expenseAnalyticsListProvider);
               final incomeCats = ref.read(incomeAnalyticsListProvider);
               final summary = ref.read(monthlySummaryAllWalletsProvider);
-              await PdfReportService().exportAndShareReport(
-                month: selectedDate,
-                transactions: txs,
-                expenseCategories: expenseCats,
-                incomeCategories: incomeCats,
-                totalIncome: summary.totalIncome,
-                totalExpense: summary.totalExpense,
-              );
+              final messenger = ScaffoldMessenger.of(context);
+              messenger.showSnackBar(const SnackBar(content: Text('Menyiapkan laporan PDF...')));
+              try {
+                await PdfReportService().exportAndShareReport(
+                  month: selectedDate,
+                  transactions: txs,
+                  expenseCategories: expenseCats,
+                  incomeCategories: incomeCats,
+                  totalIncome: summary.totalIncome,
+                  totalExpense: summary.totalExpense,
+                );
+                messenger.hideCurrentSnackBar();
+              } catch (_) {
+                messenger.hideCurrentSnackBar();
+                messenger.showSnackBar(const SnackBar(content: Text('Gagal membuat laporan PDF.')));
+              }
             },
           ),
         ],

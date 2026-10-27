@@ -6,7 +6,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/providers/database_provider.dart';
+import 'core/constants/app_constants.dart';
 import 'core/services/notification_service.dart';
+import 'core/services/privacy_guard.dart';
+import 'features/backup_restore/services/json_backup_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/navigation/main_nav_screen.dart';
 import 'features/onboarding/presentation/onboarding_screen.dart';
@@ -65,10 +68,33 @@ class _HitungAppState extends ConsumerState<HitungApp> with WidgetsBindingObserv
         ref.read(isAppLockedProvider.notifier).state = true;
       }
 
-      // Inisialisasi notifikasi lokal & proses transaksi berulang yang jatuh tempo
-      await NotificationService().init();
-      await ref.read(databaseProvider).processDueRecurringTransactions();
+      await _runStartupTasks();
     });
+  }
+
+  /// Tugas latar saat aplikasi dibuka. Setiap langkah berdiri sendiri: kegagalan satu
+  /// langkah tidak boleh menghentikan langkah lain atau menampilkan error ke pengguna.
+  Future<void> _runStartupTasks() async {
+    final prefs = ref.read(sharedPreferencesProvider);
+    await PrivacyGuard.setSecure(ref.read(isPrivacyScreenEnabledProvider));
+
+    try {
+      await NotificationService().init();
+      await NotificationService().rescheduleDailyReminderIfEnabled(
+        enabled: prefs.getBool(AppConstants.prefDailyReminderEnabled) ?? false,
+        hour: prefs.getInt(AppConstants.prefDailyReminderHour) ?? 20,
+        minute: prefs.getInt(AppConstants.prefDailyReminderMinute) ?? 0,
+      );
+    } catch (_) {}
+
+    if (!ref.read(isOnboardedProvider)) return;
+    final db = ref.read(databaseProvider);
+    try {
+      await db.processDueRecurringTransactions();
+    } catch (_) {}
+    try {
+      await JsonBackupService(db).runScheduledAutoBackup(prefs);
+    } catch (_) {}
   }
 
   @override
@@ -118,14 +144,14 @@ class _HitungAppState extends ConsumerState<HitungApp> with WidgetsBindingObserv
   Widget build(BuildContext context) {
     final isOnboarded = ref.watch(isOnboardedProvider);
     final isLocked = ref.watch(isAppLockedProvider);
-    final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp(
       title: 'HITUNG',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: themeMode,
+      // Dikunci ke mode terang sampai semua layar memakai warna dari tema (lihat settings_screen).
+      themeMode: ThemeMode.light,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,

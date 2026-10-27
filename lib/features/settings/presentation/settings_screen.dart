@@ -22,7 +22,6 @@ class SettingsScreen extends ConsumerWidget {
     final isBiometricSupported = ref.watch(isBiometricSupportedProvider).value ?? true;
     final isPinEnabled = ref.watch(isPinEnabledProvider);
     final isPrivacyEnabled = ref.watch(isPrivacyScreenEnabledProvider);
-    final currentThemeMode = ref.watch(themeModeProvider);
 
     final dailyReminderEnabled = prefs.getBool(AppConstants.prefDailyReminderEnabled) ?? false;
     final reminderHour = prefs.getInt(AppConstants.prefDailyReminderHour) ?? 20;
@@ -60,61 +59,8 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
 
-          // Tampilan & Tema (Feature 9)
-          const Text('Tampilan & Tema', style: TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-
-          Material(
-            color: AppColors.surface,
-            clipBehavior: Clip.antiAlias,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: AppColors.border),
-            ),
-            child: Column(
-              children: [
-                ListTile(
-                  leading: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: AppColors.gopayBlueLight,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      currentThemeMode == ThemeMode.dark
-                          ? LucideIcons.moon
-                          : (currentThemeMode == ThemeMode.light ? LucideIcons.sun : LucideIcons.smartphone),
-                      color: AppColors.gopayBlue,
-                      size: 20,
-                    ),
-                  ),
-                  title: const Text('Tema Aplikasi', style: TextStyle(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
-                  subtitle: Text(
-                    currentThemeMode == ThemeMode.dark
-                        ? 'Mode Gelap Aktif'
-                        : (currentThemeMode == ThemeMode.light ? 'Mode Terang Aktif' : 'Mengikuti Pengaturan Sistem'),
-                    style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
-                  ),
-                  trailing: DropdownButton<ThemeMode>(
-                    value: currentThemeMode,
-                    underline: const SizedBox.shrink(),
-                    items: const [
-                      DropdownMenuItem(value: ThemeMode.system, child: Text('Sistem')),
-                      DropdownMenuItem(value: ThemeMode.light, child: Text('Terang')),
-                      DropdownMenuItem(value: ThemeMode.dark, child: Text('Gelap')),
-                    ],
-                    onChanged: (mode) {
-                      if (mode != null) {
-                        ref.read(settingsControllerProvider.notifier).setThemeMode(mode);
-                      }
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
+          // Pilihan tema disembunyikan sementara: belum semua layar mendukung mode gelap
+          // (banyak warna terang ditulis tetap), sehingga teks bisa tidak terbaca.
 
           // Keamanan Section (Feature 9)
           const Text('Keamanan & Privasi', style: TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w700)),
@@ -529,9 +475,9 @@ class SettingsScreen extends ConsumerWidget {
             ElevatedButton(
               onPressed: () async {
                 final pin = pinController.text.trim();
-                if (pin.length < 4) {
+                if (!SettingsController.isValidPin(pin)) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('PIN minimal 4 angka.')),
+                    const SnackBar(content: Text('PIN harus 4-6 angka.')),
                   );
                   return;
                 }

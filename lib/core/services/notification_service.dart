@@ -27,6 +27,8 @@ class NotificationService {
 
     try {
       tz.initializeTimeZones();
+      // Tanpa ini tz.local = UTC, sehingga pengingat jam 20:00 berbunyi jam 03:00 WIB.
+      tz.setLocalLocation(resolveLocalLocation());
     } catch (_) {}
 
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -58,6 +60,40 @@ class NotificationService {
     _initialized = true;
   }
 
+  /// Menentukan lokasi zona waktu perangkat tanpa plugin tambahan:
+  /// 1) zona Indonesia berdasarkan offset (WIB/WITA/WIT),
+  /// 2) lokasi yang singkatan & offset-nya sama dengan perangkat,
+  /// 3) lokasi mana pun dengan offset sama, 4) UTC.
+  @visibleForTesting
+  static tz.Location resolveLocalLocation({Duration? offset, String? abbreviation, DateTime? now}) {
+    final current = now ?? DateTime.now();
+    final off = offset ?? current.timeZoneOffset;
+    final abbr = abbreviation ?? current.timeZoneName;
+    const indonesia = {420: 'Asia/Jakarta', 480: 'Asia/Makassar', 540: 'Asia/Jayapura'};
+    final preferred = indonesia[off.inMinutes];
+    if (preferred != null) return tz.getLocation(preferred);
+
+    final nowMs = current.toUtc().millisecondsSinceEpoch;
+    tz.Location? sameOffset;
+    for (final loc in tz.timeZoneDatabase.locations.values) {
+      final zone = loc.timeZone(nowMs);
+      if (zone.offset != off) continue;
+      if (zone.abbreviation == abbr) return loc;
+      sameOffset ??= loc;
+    }
+    return sameOffset ?? tz.UTC;
+  }
+
+  /// Menjadwalkan ulang pengingat harian bila aktif (dipanggil saat aplikasi dibuka).
+  Future<void> rescheduleDailyReminderIfEnabled({
+    required bool enabled,
+    required int hour,
+    required int minute,
+  }) async {
+    if (!enabled) return;
+    await scheduleDailyReminder(hour: hour, minute: minute);
+  }
+
   /// Meminta izin notifikasi (Android 13+ & iOS)
   Future<bool> requestPermissions() async {
     if (!_initialized) await init();
@@ -86,7 +122,9 @@ class NotificationService {
   Future<void> scheduleDailyReminder({required int hour, required int minute}) async {
     if (!_initialized) await init();
 
-    await _plugin.cancel(id: 1001); // ID untuk pengingat harian
+    try {
+      await _plugin.cancel(id: 1001); // ID untuk pengingat harian
+    } catch (_) {}
 
     final now = tz.TZDateTime.now(tz.local);
     var scheduledDate = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);

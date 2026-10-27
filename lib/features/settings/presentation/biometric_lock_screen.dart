@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../core/constants/app_colors.dart';
@@ -18,8 +19,15 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
   @override
   void initState() {
     super.initState();
-    // Auto-prompt biometric on appearance
-    WidgetsBinding.instance.addPostFrameCallback((_) => _unlock());
+    // Biometrik aktif -> langsung minta sidik jari. Hanya PIN -> langsung minta PIN.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (ref.read(isBiometricEnabledProvider)) {
+        _unlock();
+      } else if (ref.read(isPinEnabledProvider)) {
+        _showPinEntryDialog(context);
+      }
+    });
   }
 
   Future<void> _unlock() async {
@@ -30,9 +38,15 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
       case UnlockResult.success:
         break;
       case UnlockResult.unavailable:
-        messenger?.showSnackBar(const SnackBar(
-          content: Text('Kunci layar perangkat tidak aktif, jadi kunci aplikasi dinonaktifkan.'),
-        ));
+        if (mounted && ref.read(isPinEnabledProvider)) {
+          // Biometrik tidak tersedia lagi, tapi PIN aktif: aplikasi tetap terkunci.
+          setState(() => _message = 'Kunci layar perangkat tidak aktif. Buka dengan PIN aplikasi.');
+          _showPinEntryDialog(context);
+        } else {
+          messenger?.showSnackBar(const SnackBar(
+            content: Text('Kunci layar perangkat tidak aktif, jadi kunci aplikasi dinonaktifkan.'),
+          ));
+        }
         break;
       case UnlockResult.lockedOut:
         setState(() => _message = 'Terlalu banyak percobaan. Tunggu sebentar atau buka dengan PIN perangkat.');
@@ -45,6 +59,8 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isBiometricEnabled = ref.watch(isBiometricEnabledProvider);
+    final isPinEnabled = ref.watch(isPinEnabledProvider);
     return PopScope(
       canPop: false,
       child: Scaffold(
@@ -102,40 +118,42 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
                     ),
                   ],
                   const SizedBox(height: 36),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton.icon(
-                      onPressed: _unlock,
-                      icon: const Icon(LucideIcons.fingerprint, size: 22),
-                      label: const Text(
-                        'Pindai Sidik Jari',
-                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.gopayBlue,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                  if (isBiometricEnabled)
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton.icon(
+                        onPressed: _unlock,
+                        icon: const Icon(LucideIcons.fingerprint, size: 22),
+                        label: const Text(
+                          'Pindai Sidik Jari',
+                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.gopayBlue,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
                         ),
                       ),
                     ),
-                  ),
                   const SizedBox(height: 12),
                   // Opsi Buka dengan PIN Cadangan (Feature 9)
-                  TextButton.icon(
-                    onPressed: () => _showPinEntryDialog(context),
-                    icon: const Icon(LucideIcons.keyRound, size: 16, color: AppColors.gopayBlue),
-                    label: const Text(
-                      'Buka dengan PIN Aplikasi',
-                      style: TextStyle(
-                        color: AppColors.gopayBlue,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
+                  if (isPinEnabled)
+                    TextButton.icon(
+                      onPressed: () => _showPinEntryDialog(context),
+                      icon: const Icon(LucideIcons.keyRound, size: 16, color: AppColors.gopayBlue),
+                      label: const Text(
+                        'Buka dengan PIN Aplikasi',
+                        style: TextStyle(
+                          color: AppColors.gopayBlue,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -169,6 +187,7 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
                     keyboardType: TextInputType.number,
                     obscureText: true,
                     maxLength: 6,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontSize: 22, letterSpacing: 8, fontWeight: FontWeight.w800),
                     decoration: InputDecoration(
@@ -182,16 +201,22 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
               actions: [
                 TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
                 ElevatedButton(
-                  onPressed: () {
+                  onPressed: () async {
                     final pin = pinController.text.trim();
-                    final success = ref.read(settingsControllerProvider.notifier).verifyAppPin(pin);
-                    if (success) {
-                      Navigator.pop(ctx);
-                    } else {
-                      setDialogState(() {
-                        errText = 'PIN salah. Silakan coba lagi.';
-                      });
+                    final result = await ref.read(settingsControllerProvider.notifier).verifyAppPin(pin);
+                    if (result.success) {
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      return;
                     }
+                    pinController.clear();
+                    setDialogState(() {
+                      if (result.isLocked) {
+                        final secs = result.lockedFor!.inSeconds;
+                        errText = 'Terlalu banyak percobaan. Coba lagi dalam $secs detik.';
+                      } else {
+                        errText = 'PIN salah. Sisa ${result.remainingAttempts} percobaan.';
+                      }
+                    });
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: AppColors.gopayBlue),
                   child: const Text('Buka', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),

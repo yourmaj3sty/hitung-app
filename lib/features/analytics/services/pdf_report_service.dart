@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
@@ -14,6 +15,42 @@ class PdfReportService {
   factory PdfReportService() => _instance;
   PdfReportService._internal();
 
+  pw.ThemeData? _theme;
+  Set<int> _supportedRunes = const {};
+
+  /// Memuat font Plus Jakarta Sans yang dibundel (font standar PDF tidak mendukung
+  /// karakter di luar Latin-1 seperti • → atau huruf beraksen tertentu).
+  Future<pw.ThemeData> loadTheme() async {
+    if (_theme != null) return _theme!;
+    final regular = await rootBundle.load('assets/google_fonts/PlusJakartaSans-Regular.ttf');
+    final bold = await rootBundle.load('assets/google_fonts/PlusJakartaSans-Bold.ttf');
+    _supportedRunes = TtfParser(regular).charToGlyphIndexMap.keys.toSet();
+    return _theme = pw.ThemeData.withFont(base: pw.Font.ttf(regular), bold: pw.Font.ttf(bold));
+  }
+
+  static const Map<int, String> _replacements = {
+    0x2192: '->', // →
+    0x2190: '<-', // ←
+    0x2022: '-', // •
+    0x2726: '*', // ✦
+  };
+
+  /// Mengganti karakter yang tidak ada di font (mis. emoji) agar tidak tercetak sebagai kotak.
+  String clean(String text) {
+    if (_supportedRunes.isEmpty) return text;
+    final out = StringBuffer();
+    for (final rune in text.runes) {
+      if (_supportedRunes.contains(rune) || rune == 0x20) {
+        out.writeCharCode(rune);
+      } else if (_replacements.containsKey(rune)) {
+        out.write(_replacements[rune]);
+      }
+      // Karakter lain (emoji, aksara non-Latin) dilewati.
+    }
+    final result = out.toString().replaceAll(RegExp(r' {2,}'), ' ').trim();
+    return result.isEmpty ? '-' : result;
+  }
+
   Future<void> exportAndShareReport({
     required DateTime month,
     required List<TransactionItem> transactions,
@@ -22,7 +59,8 @@ class PdfReportService {
     required int totalIncome,
     required int totalExpense,
   }) async {
-    final pdf = pw.Document();
+    final theme = await loadTheme();
+    final pdf = pw.Document(theme: theme);
     final netSavings = totalIncome - totalExpense;
 
     pdf.addPage(
@@ -116,7 +154,7 @@ class PdfReportService {
                 headers: ['Kategori', 'Transaksi', 'Porsi', 'Total Nominal'],
                 data: expenseCategories.map((c) {
                   return [
-                    c.category.name,
+                    clean(c.category.name),
                     '${c.transactionCount}x',
                     '${c.percentage}%',
                     CurrencyFormatter.formatRupiah(c.totalAmount),
@@ -149,7 +187,7 @@ class PdfReportService {
                 headers: ['Kategori', 'Transaksi', 'Porsi', 'Total Nominal'],
                 data: incomeCategories.map((c) {
                   return [
-                    c.category.name,
+                    clean(c.category.name),
                     '${c.transactionCount}x',
                     '${c.percentage}%',
                     CurrencyFormatter.formatRupiah(c.totalAmount),
@@ -179,16 +217,17 @@ class PdfReportService {
             else
               pw.TableHelper.fromTextArray(
                 headers: ['Tanggal', 'Jenis', 'Dompet', 'Kategori / Keterangan', 'Nominal'],
-                data: transactions.take(30).map((item) {
+                // Semua transaksi dicetak; tabel otomatis berlanjut ke halaman berikutnya.
+                data: transactions.map((item) {
                   final tx = item.transaction;
                   final isExp = tx.type == 'EXPENSE';
                   final isInc = tx.type == 'INCOME';
                   final typeLabel = isExp ? 'Keluar' : (isInc ? 'Masuk' : 'Transfer');
-                  final catOrNote = item.category?.name ?? tx.note ?? '-';
+                  final catOrNote = clean(item.category?.name ?? tx.note ?? '-');
                   return [
                     DateFormatter.formatShortDate(tx.transactionDate),
                     typeLabel,
-                    item.wallet.name,
+                    clean(item.wallet.name),
                     catOrNote,
                     '${isExp ? '-' : (isInc ? '+' : '')}${CurrencyFormatter.formatRupiah(tx.amount)}',
                   ];
@@ -210,7 +249,7 @@ class PdfReportService {
             // Footer note
             pw.Center(
               child: pw.Text(
-                'Dihasilkan secara otomatis oleh HITUNG App • Offline-First & Privasi Terjaga',
+                'Dihasilkan secara otomatis oleh HITUNG App - Offline-First & Privasi Terjaga',
                 style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey500),
               ),
             ),
