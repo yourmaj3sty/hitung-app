@@ -28,8 +28,8 @@
   const btnDownloadApkBottom = document.getElementById('btn-download-apk-bottom');
   const btnOpenIosBottom = document.getElementById('btn-open-ios-bottom');
 
-  // Direct APK Download URL (GitHub Release v2.0 or local route)
-  const APK_DOWNLOAD_URL = 'https://github.com/yourmaj3sty/hitung-app/releases/download/v2.0.0/app-release.apk';
+  // Direct APK Download URL (Hosted directly on website for instant 1-click download)
+  const APK_DOWNLOAD_URL = '/hitung-app.apk';
   const PWA_APP_URL = '/app';
 
   // Icons SVG
@@ -97,6 +97,7 @@
 
   if (btnDownloadApkBottom) {
     btnDownloadApkBottom.href = APK_DOWNLOAD_URL;
+    btnDownloadApkBottom.setAttribute('download', 'hitung-app.apk');
   }
 
   if (btnOpenIosBottom) {
