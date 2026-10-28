@@ -1,9 +1,9 @@
-import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:universal_io/io.dart';
 import '../utils/currency_formatter.dart';
 
 /// Layanan notifikasi lokal 100% offline (Feature 6 & 7):
@@ -24,6 +24,10 @@ class NotificationService {
 
   Future<void> init() async {
     if (_initialized) return;
+    if (kIsWeb) {
+      _initialized = true;
+      return;
+    }
 
     try {
       tz.initializeTimeZones();

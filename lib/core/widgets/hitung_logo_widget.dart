@@ -121,7 +121,9 @@ class HitungLogoWidget extends StatelessWidget {
     if (!showText) return iconWidget;
 
     final fontSize = isCompact ? size * 0.48 : size * 0.52;
-    final finalTextColor = textColor ?? AppColors.textPrimary;
+    final isDarkContext = Theme.of(context).brightness == Brightness.dark || variant == HitungLogoVariant.dark;
+    final finalTextColor = textColor ?? (isDarkContext ? Colors.white : AppColors.textPrimary);
+    final finalTaglineColor = isDarkContext ? Colors.white.withOpacity(0.85) : finalTextColor.withOpacity(0.7);
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -167,7 +169,7 @@ class HitungLogoWidget extends StatelessWidget {
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: size * 0.22,
                   fontWeight: FontWeight.w500,
-                  color: finalTextColor.withOpacity(0.7),
+                  color: finalTaglineColor,
                   letterSpacing: -0.2,
                 ),
               ),

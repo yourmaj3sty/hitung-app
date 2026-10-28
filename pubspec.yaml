@@ -40,7 +40,7 @@ dependencies:
   image_picker: ^1.2.4
   crypto: ^3.0.8
   timezone: ^0.11.2
-
+  universal_io: ^2.3.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -57,3 +57,28 @@ flutter:
   assets:
     - assets/lottie/
     - assets/google_fonts/
+    - assets/icon/
+
+  fonts:
+    - family: PlusJakartaSans
+      fonts:
+        - asset: assets/google_fonts/PlusJakartaSans-Regular.ttf
+          weight: 400
+        - asset: assets/google_fonts/PlusJakartaSans-Medium.ttf
+          weight: 500
+        - asset: assets/google_fonts/PlusJakartaSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/google_fonts/PlusJakartaSans-Bold.ttf
+          weight: 700
+        - asset: assets/google_fonts/PlusJakartaSans-ExtraBold.ttf
+          weight: 800
+
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: false
+  image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#0F172A"
+  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
+  remove_alpha_ios: true
+

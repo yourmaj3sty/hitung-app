@@ -1,6 +1,7 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:universal_io/io.dart';
 import 'package:uuid/uuid.dart';
 
 class ReceiptStorageService {
@@ -10,6 +11,7 @@ class ReceiptStorageService {
 
   /// Menyimpan file foto struk ke folder lokal aplikasi: `<AppDocDir>/receipts/`
   Future<String> saveReceipt(String sourcePath) async {
+    if (kIsWeb) return sourcePath;
     final docsDir = await getApplicationDocumentsDirectory();
     final receiptsDir = Directory(p.join(docsDir.path, 'receipts'));
     if (!await receiptsDir.exists()) {

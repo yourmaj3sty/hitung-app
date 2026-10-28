@@ -1,8 +1,5 @@
-import 'dart:io';
 import 'package:drift/drift.dart';
-import 'package:drift/native.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
+import 'connection/connection.dart' as impl;
 import 'package:uuid/uuid.dart';
 import '../constants/app_constants.dart';
 import '../utils/color_utils.dart';
@@ -689,7 +686,7 @@ class AppDatabase extends _$AppDatabase {
         });
       } on DataValidationException {
         await toggleRecurringActive(item.id, false);
-      } on SqliteException {
+      } catch (_) {
         await toggleRecurringActive(item.id, false);
       }
     }
@@ -1114,10 +1111,4 @@ class BackupParser {
   }
 }
 
-LazyDatabase _openConnection() {
-  return LazyDatabase(() async {
-    final dbFolder = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dbFolder.path, 'hitung_app.sqlite'));
-    return NativeDatabase.createInBackground(file);
-  });
-}
+QueryExecutor _openConnection() => impl.openConnection();

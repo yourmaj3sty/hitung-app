@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'dart:math';
@@ -15,6 +16,7 @@ final localAuthProvider = Provider<LocalAuthentication>((ref) {
 });
 
 final isBiometricSupportedProvider = FutureProvider<bool>((ref) async {
+  if (kIsWeb) return false;
   final auth = ref.watch(localAuthProvider);
   try {
     final canCheck = await auth.canCheckBiometrics;

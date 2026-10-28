@@ -174,7 +174,7 @@ class _HitungAppState extends ConsumerState<HitungApp> with WidgetsBindingObserv
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        AppLogo(size: 72, showText: true),
+                        AppLogo(size: 72, showText: true, textColor: Colors.white),
                         SizedBox(height: 16),
                         Text(
                           'Data Keuangan Terlindungi',
@@ -188,17 +188,43 @@ class _HitungAppState extends ConsumerState<HitungApp> with WidgetsBindingObserv
           ],
         );
       },
-      home: !_splashCompleted
-          ? SplashScreen(
-              onCompleted: () {
-                setState(() {
-                  _splashCompleted = true;
-                });
-              },
-            )
-          : (isLocked
-              ? const BiometricLockScreen()
-              : (isOnboarded ? const MainNavScreen() : const OnboardingScreen())),
+      home: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 350),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) {
+          final isSplash = child is SplashScreen || (child.key == const ValueKey('splash_screen'));
+          if (isSplash) {
+            return FadeTransition(
+              opacity: animation,
+              child: child,
+            );
+          }
+          return FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.94, end: 1.0).animate(
+                CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              ),
+              child: child,
+            ),
+          );
+        },
+        child: !_splashCompleted
+            ? SplashScreen(
+                key: const ValueKey('splash_screen'),
+                onCompleted: () {
+                  setState(() {
+                    _splashCompleted = true;
+                  });
+                },
+              )
+            : (isLocked
+                ? const BiometricLockScreen(key: ValueKey('lock_screen'))
+                : (isOnboarded
+                    ? const MainNavScreen(key: ValueKey('main_nav_screen'))
+                    : const OnboardingScreen(key: ValueKey('onboarding_screen')))),
+      ),
     );
   }
 }

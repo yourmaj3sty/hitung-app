@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:universal_io/io.dart';
 
 /// Utilitas file ekspor sementara (JSON/CSV) di folder temp.
 class ExportFileUtils {

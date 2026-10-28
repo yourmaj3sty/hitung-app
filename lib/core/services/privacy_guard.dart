@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:universal_io/io.dart';
 import 'package:flutter/services.dart';
 
 /// Mengaktifkan FLAG_SECURE di Android: isi layar tidak tampil di app switcher

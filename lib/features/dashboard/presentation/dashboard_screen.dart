@@ -17,11 +17,59 @@ import 'widgets/balance_summary_card.dart';
 import 'widgets/quick_action_bento_bar.dart';
 import 'widgets/daily_transaction_group.dart';
 
-class DashboardScreen extends ConsumerWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> with SingleTickerProviderStateMixin {
+  late AnimationController _entranceController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _entranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+
+    _fadeAnimation = CurvedAnimation(
+      parent: _entranceController,
+      curve: Curves.easeOut,
+    );
+
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.04),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _entranceController,
+      curve: Curves.easeOutCubic,
+    ));
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+        if (reduceMotion) {
+          _entranceController.value = 1.0;
+        } else {
+          _entranceController.forward();
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _entranceController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final selectedDate = ref.watch(selectedDateFilterProvider);
     final selectedWalletId = ref.watch(selectedWalletFilterProvider);
 
@@ -144,124 +192,130 @@ class DashboardScreen extends ConsumerWidget {
           const SizedBox(width: 8),
         ],
       ),
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 2. Hero Balance Container (Satu Kartu Besar radius: 24)
-                  BalanceSummaryCard(
-                    wallets: wallets,
-                    monthlySummary: summary,
-                    selectedWalletId: selectedWalletId,
-                    onSelectWallet: (id) {
-                      ref.read(selectedWalletFilterProvider.notifier).state = id;
-                    },
-                    onAddWallet: () => WalletFormSheet.show(context),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // 3. Quick Action Bento Bar (4 Tombol radius: 16)
-                  QuickActionBentoBar(
-                    onExpense: () => QuickEntrySheet.show(context, initialType: 'EXPENSE'),
-                    onIncome: () => QuickEntrySheet.show(context, initialType: 'INCOME'),
-                    onTransfer: () => QuickEntrySheet.show(context, initialType: 'TRANSFER'),
-                    onSavings: () => QuickEntrySheet.show(context, isSavingsMode: true),
-                  ),
-                  const SizedBox(height: 18),
-
-                  // Section Title Aktivitas Transaksi
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      body: FadeTransition(
+        opacity: _fadeAnimation,
+        child: SlideTransition(
+          position: _slideAnimation,
+          child: CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Aktivitas Transaksi',
-                        style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                        ),
+                      // 2. Hero Balance Container (Satu Kartu Besar radius: 24)
+                      BalanceSummaryCard(
+                        wallets: wallets,
+                        monthlySummary: summary,
+                        selectedWalletId: selectedWalletId,
+                        onSelectWallet: (id) {
+                          ref.read(selectedWalletFilterProvider.notifier).state = id;
+                        },
+                        onAddWallet: () => WalletFormSheet.show(context),
                       ),
-                      if (selectedWalletId != null)
-                        GestureDetector(
-                          onTap: () {
-                            ref.read(selectedWalletFilterProvider.notifier).state = null;
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: AppColors.gopayBlueLight,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Row(
-                              children: [
-                                Text(
-                                  'Filter Aktif',
-                                  style: TextStyle(
-                                    color: AppColors.gopayBlue,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                SizedBox(width: 4),
-                                Icon(LucideIcons.x, size: 12, color: AppColors.gopayBlue),
-                              ],
+                      const SizedBox(height: 14),
+
+                      // 3. Quick Action Bento Bar (4 Tombol radius: 16)
+                      QuickActionBentoBar(
+                        onExpense: () => QuickEntrySheet.show(context, initialType: 'EXPENSE'),
+                        onIncome: () => QuickEntrySheet.show(context, initialType: 'INCOME'),
+                        onTransfer: () => QuickEntrySheet.show(context, initialType: 'TRANSFER'),
+                        onSavings: () => QuickEntrySheet.show(context, isSavingsMode: true),
+                      ),
+                      const SizedBox(height: 18),
+
+                      // Section Title Aktivitas Transaksi
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Aktivitas Transaksi',
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
-                        ),
+                          if (selectedWalletId != null)
+                            GestureDetector(
+                              onTap: () {
+                                ref.read(selectedWalletFilterProvider.notifier).state = null;
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: AppColors.gopayBlueLight,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Text(
+                                      'Filter Aktif',
+                                      style: TextStyle(
+                                        color: AppColors.gopayBlue,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    SizedBox(width: 4),
+                                    Icon(LucideIcons.x, size: 12, color: AppColors.gopayBlue),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                ],
+                ),
               ),
-            ),
-          ),
 
-          // 4. Grouped Daily Transaction Cards (radius: 20)
-          if (dailyGroups.isEmpty) ...[
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: EmptyStateWidget(
-                icon: LucideIcons.receipt,
-                title: 'Belum Ada Transaksi',
-                subtitle: 'Ketuk tombol aksi cepat di atas untuk mencatat pengeluaran atau pemasukan.',
-                action: ElevatedButton.icon(
-                  onPressed: () => QuickEntrySheet.show(context, initialType: 'EXPENSE'),
-                  icon: const Icon(LucideIcons.plus, size: 18),
-                  label: const Text('Catat Sekarang'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.gojekGreen,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              // 4. Grouped Daily Transaction Cards (radius: 20)
+              if (dailyGroups.isEmpty) ...[
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: EmptyStateWidget(
+                    icon: LucideIcons.receipt,
+                    title: 'Belum Ada Transaksi',
+                    subtitle: 'Ketuk tombol aksi cepat di atas untuk mencatat pengeluaran atau pemasukan.',
+                    action: ElevatedButton.icon(
+                      onPressed: () => QuickEntrySheet.show(context, initialType: 'EXPENSE'),
+                      icon: const Icon(LucideIcons.plus, size: 18),
+                      label: const Text('Catat Sekarang'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.gojekGreen,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
-          ] else ...[
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final group = dailyGroups[index];
-                    return DailyTransactionGroupWidget(
-                      dailyGroup: group,
-                      onDelete: (item) => _deleteWithUndo(context, ref, item),
-                      onTap: (item) => QuickEntrySheet.show(context, editTransaction: item.transaction),
-                    );
-                  },
-                  childCount: dailyGroups.length,
+              ] else ...[
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final group = dailyGroups[index];
+                        return DailyTransactionGroupWidget(
+                          dailyGroup: group,
+                          onDelete: (item) => _deleteWithUndo(context, ref, item),
+                          onTap: (item) => QuickEntrySheet.show(context, editTransaction: item.transaction),
+                        );
+                      },
+                      childCount: dailyGroups.length,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            const SliverToBoxAdapter(
-              child: SizedBox(height: 88),
-            ),
-          ],
-        ],
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 88),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
