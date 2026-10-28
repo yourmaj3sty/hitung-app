@@ -1,38 +1,469 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
-  <base href="/">
-
   <meta charset="UTF-8">
-  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="HITUNG - Pencatat Pengeluaran Offline-First Gen Z">
-  <meta name="theme-color" content="#CEFD37">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Hitung • Pencatat Pengeluaran Offline-First Gen Z</title>
+  <meta name="description" content="Catat duit tanpa ribet. 100% offline, bebas iklan, tanpa login, dan privasi aman di tanganmu. Tersedia untuk Android & iPhone.">
+  <meta name="theme-color" content="#0B0F17">
 
-  <!-- iOS PWA meta tags & icons -->
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Hitung">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="icons/Icon-192.png">
+  <!-- Open Graph / Meta Share Preview -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Hitung • Catat Duit, Tanpa Ribet.">
+  <meta property="og:description" content="Aplikasi pencatat keuangan offline-first Gen Z. 100% offline, tanpa iklan, dan privasi aman.">
+  <meta property="og:image" content="app_icon.png">
 
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <!-- Favicon & Touch Icon -->
+  <link rel="icon" type="image/png" href="app_icon.png">
+  <link rel="apple-touch-icon" href="app_icon.png">
 
-  <title>Hitung - Pencatat Pengeluaran</title>
-  <link rel="manifest" href="manifest.json">
-  <style>
-    body {
-      background-color: #0F172A;
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      user-select: none;
-      -webkit-user-select: none;
-    }
-  </style>
+  <!-- Google Fonts: Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <script src="flutter_bootstrap.js" async></script>
+  <!-- Interactive Oil Motion Background Canvas -->
+  <canvas id="oil-motion-canvas"></canvas>
+  <div class="oil-ambient-glow glow-1"></div>
+  <div class="oil-ambient-glow glow-2"></div>
+  <div class="oil-ambient-glow glow-3"></div>
+
+  <!-- Main Navigation -->
+  <header class="navbar">
+    <div class="nav-container">
+      <a href="#" class="brand-logo">
+        <div class="logo-squircle">
+          <span class="logo-h">h</span>
+          <span class="logo-dot"></span>
+        </div>
+        <span class="brand-name">hitung<span class="brand-period">.</span></span>
+      </a>
+
+      <nav class="nav-links">
+        <a href="#fitur" class="nav-link">Fitur</a>
+        <a href="#keamanan" class="nav-link">Keamanan</a>
+        <a href="#perangkat" class="nav-link">Perangkat</a>
+      </nav>
+
+      <div class="nav-actions">
+        <a href="https://github.com/yourmaj3sty/hitung-app" target="_blank" rel="noopener" class="btn-ghost" title="GitHub Repository">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+          <span class="hide-mobile">GitHub</span>
+        </a>
+        <button id="nav-cta-btn" class="btn-primary-small">Download</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <main class="hero-section">
+    <div class="hero-container">
+      <div class="hero-content">
+        <!-- Floating Badge -->
+        <div class="hero-badge">
+          <span class="badge-dot"></span>
+          <span class="badge-text">v2.0 • Offline-First Financial Tracker</span>
+          <span class="badge-tag">GEN Z</span>
+        </div>
+
+        <!-- Headline -->
+        <h1 class="hero-title">
+          Catat duit,<br>
+          <span class="text-gradient-lime">tanpa ribet.</span>
+        </h1>
+
+        <!-- Subtitle -->
+        <p class="hero-desc">
+          Pencatat pengeluaran harian <strong>100% offline</strong>. Bebas iklan, tanpa registrasi akun, dan data keuanganmu tersimpan privat di dalam memorimu sendiri.
+        </p>
+
+        <!-- Dynamic Smart Device Action Box -->
+        <div class="smart-action-box" id="smart-action-box">
+          <div class="device-pill" id="device-pill">
+            <span class="device-icon" id="device-icon"></span>
+            <span class="device-text" id="device-detected-text">Mendeteksi perangkat...</span>
+          </div>
+
+          <div class="action-buttons-group">
+            <!-- Dynamic Main CTA (Android or iOS PWA) -->
+            <a id="main-cta-btn" href="#" class="btn-primary-hero">
+              <span class="btn-icon" id="main-cta-icon"></span>
+              <div class="btn-labels">
+                <span class="btn-title" id="main-cta-title">Unduh Aplikasi</span>
+                <span class="btn-subtitle" id="main-cta-subtitle">Mempersiapkan...</span>
+              </div>
+              <svg class="btn-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+
+            <!-- Secondary CTA (Option switch or Web PWA) -->
+            <a id="secondary-cta-btn" href="/app" class="btn-secondary-hero">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              <span id="secondary-cta-text">Buka Web App</span>
+            </a>
+
+            <!-- QR Code Button for Desktop -->
+            <button id="qr-trigger-btn" class="btn-icon-hero" title="Scan QR Code via Ponsel">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            </button>
+          </div>
+
+          <!-- Trust Badges -->
+          <div class="hero-trust-row">
+            <span class="trust-item"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#CEFD37" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 100% Offline (SQLite)</span>
+            <span class="trust-item"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#CEFD37" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Tanpa Akun & Iklan</span>
+            <span class="trust-item"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#CEFD37" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Proteksi PIN 6-Digit</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hero Visual Phone Showcase -->
+      <div class="hero-phone-container">
+        <div class="phone-perspective-frame" id="phone-frame">
+          <!-- Ambient Phone Aura -->
+          <div class="phone-aura"></div>
+          
+          <!-- Realistic Device Mockup Shell -->
+          <div class="iphone-shell">
+            <div class="iphone-notch">
+              <div class="dynamic-island"></div>
+            </div>
+
+            <!-- Simulated Hitung App UI Screen -->
+            <div class="screen-content">
+              <!-- Top Header Bar -->
+              <div class="app-mock-header">
+                <div class="user-greeting">
+                  <span class="greeting-sub">Halo, Bintang 👋</span>
+                  <span class="greeting-title">Dashboard Finansial</span>
+                </div>
+                <div class="mock-bell-icon">
+                  <span class="bell-dot"></span>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                </div>
+              </div>
+
+              <!-- Main Balance Card (Neon GoPay Style) -->
+              <div class="app-balance-card">
+                <div class="balance-card-header">
+                  <span class="balance-label">Total Saldo Aktif</span>
+                  <span class="balance-badge">+24.5% bln ini</span>
+                </div>
+                <div class="balance-amount-row">
+                  <span class="currency-prefix">Rp</span>
+                  <span class="balance-value" id="mock-counter">18.450.000</span>
+                </div>
+                <div class="balance-stats-grid">
+                  <div class="stat-col income">
+                    <span class="stat-tag">↓ Pemasukan</span>
+                    <span class="stat-val">+Rp 24.500.000</span>
+                  </div>
+                  <div class="stat-col expense">
+                    <span class="stat-tag">↑ Pengeluaran</span>
+                    <span class="stat-val">-Rp 6.050.000</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Wallets Carousel Preview -->
+              <div class="mock-section-label">Dompet & Tabungan</div>
+              <div class="mock-wallets-scroll">
+                <div class="mock-wallet-chip active">
+                  <span class="wallet-icon">🏦</span>
+                  <div class="wallet-info">
+                    <span class="w-name">BCA Utama</span>
+                    <span class="w-val">Rp 12.800.000</span>
+                  </div>
+                </div>
+                <div class="mock-wallet-chip">
+                  <span class="wallet-icon">⚡</span>
+                  <div class="wallet-info">
+                    <span class="w-name">GoPay Jajan</span>
+                    <span class="w-val">Rp 650.000</span>
+                  </div>
+                </div>
+                <div class="mock-wallet-chip savings">
+                  <span class="wallet-icon">🎯</span>
+                  <div class="wallet-info">
+                    <span class="w-name">Target Laptop</span>
+                    <span class="w-progress">82% tercapai</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Recent Transactions List -->
+              <div class="mock-section-label">Transaksi Terakhir</div>
+              <div class="mock-tx-list">
+                <div class="mock-tx-item">
+                  <div class="tx-icon-box food">☕</div>
+                  <div class="tx-details">
+                    <span class="tx-name">Kopi Kenangan Susu</span>
+                    <span class="tx-meta">Hari ini • GoPay Jajan</span>
+                  </div>
+                  <span class="tx-amount minus">-Rp 28.000</span>
+                </div>
+                <div class="mock-tx-item">
+                  <div class="tx-icon-box income">💼</div>
+                  <div class="tx-details">
+                    <span class="tx-name">Gaji Freelance UI</span>
+                    <span class="tx-meta">Kemarin • BCA Utama</span>
+                  </div>
+                  <span class="tx-amount plus">+Rp 6.500.000</span>
+                </div>
+                <div class="mock-tx-item">
+                  <div class="tx-icon-box ent">🍿</div>
+                  <div class="tx-details">
+                    <span class="tx-name">Spotify Duo Bulanan</span>
+                    <span class="tx-meta">25 Okt • Dana</span>
+                  </div>
+                  <span class="tx-amount minus">-Rp 79.000</span>
+                </div>
+              </div>
+
+              <!-- Floating Quick Add Button in Mockup -->
+              <div class="mock-floating-fab">
+                <span class="fab-plus">+</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Bento Grid Features Section -->
+  <section class="features-section" id="fitur">
+    <div class="section-container">
+      <div class="section-badge">KENAPA HARUS HITUNG?</div>
+      <h2 class="section-title">Semua kebutuhan finansialmu,<br><span class="text-gradient-lime">dirancang seringkas mungkin.</span></h2>
+
+      <div class="bento-grid">
+        <!-- Bento 1: 100% Offline (Large) -->
+        <div class="bento-card bento-span-2 bento-card-interactive">
+          <div class="bento-glow"></div>
+          <div class="bento-badge-tag">OFFLINE-FIRST ARCHITECTURE</div>
+          <h3 class="bento-title">Data 100% Lokal di Ponselmu. Bukan di Cloud Orang Lain.</h3>
+          <p class="bento-desc">
+            Menggunakan mesin database SQLite lokal dengan performa ACID atomik. Aplikasi tetap bekerja cepat di mode pesawat, di basement, maupun tanpa kuota internet. Tidak ada risiko kebocoran database cloud.
+          </p>
+          <div class="bento-illustration-row">
+            <div class="bento-pill-feature">
+              <span class="pill-dot green"></span> SQLite C-Engine Native
+            </div>
+            <div class="bento-pill-feature">
+              <span class="pill-dot purple"></span> Zero Network Latency
+            </div>
+            <div class="bento-pill-feature">
+              <span class="pill-dot lime"></span> Tanpa Sinkronisasi Berbayar
+            </div>
+          </div>
+        </div>
+
+        <!-- Bento 2: Zero Login & No Ads (Medium) -->
+        <div class="bento-card bento-card-interactive">
+          <div class="bento-glow"></div>
+          <div class="bento-icon-header">
+            <div class="bento-icon-box">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#CEFD37" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+          </div>
+          <h3 class="bento-title">Zero Iklan. Zero Registrasi.</h3>
+          <p class="bento-desc">
+            Tidak perlu memasukkan nomor HP, Google akun, atau menunggu OTP. Buka aplikasi dan catat pengeluaranmu dalam hitungan detik.
+          </p>
+        </div>
+
+        <!-- Bento 3: Multi-Dompet & Tabungan (Medium) -->
+        <div class="bento-card bento-card-interactive">
+          <div class="bento-glow"></div>
+          <div class="bento-icon-header">
+            <div class="bento-icon-box">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 15h0M2 10h20"/></svg>
+            </div>
+          </div>
+          <h3 class="bento-title">Multi-Dompet & Kantong Target</h3>
+          <p class="bento-desc">
+            Pisahkan saldo Bank (BCA, Mandiri, Jago), E-Wallet (GoPay, OVO, Dana), hingga target tabungan dengan indikator visual otomatis.
+          </p>
+        </div>
+
+        <!-- Bento 4: Analitik & PDF Export (Large) -->
+        <div class="bento-card bento-span-2 bento-card-interactive">
+          <div class="bento-glow"></div>
+          <div class="bento-badge-tag">SMART INSIGHTS</div>
+          <h3 class="bento-title">Grafik Tren Bulanan & Ekspor Laporan PDF Siap Cetak</h3>
+          <p class="bento-desc">
+            Pantau rasio pengeluaran berdasarkan kategori, grafik tren 6–12 bulan, batas anggaran 80%/100%, serta ekspor rekap ke format PDF atau CSV Excel secara instan.
+          </p>
+          <div class="bento-chart-mock">
+            <div class="mock-bar-item"><div class="bar-fill" style="height: 45%;"></div><span>Mei</span></div>
+            <div class="mock-bar-item"><div class="bar-fill" style="height: 60%;"></div><span>Jun</span></div>
+            <div class="mock-bar-item"><div class="bar-fill" style="height: 80%;"></div><span>Jul</span></div>
+            <div class="mock-bar-item"><div class="bar-fill" style="height: 50%;"></div><span>Ags</span></div>
+            <div class="mock-bar-item"><div class="bar-fill" style="height: 70%;"></div><span>Sep</span></div>
+            <div class="mock-bar-item"><div class="bar-fill active" style="height: 92%;"></div><span class="active-lbl">Okt</span></div>
+          </div>
+        </div>
+
+        <!-- Bento 5: Keamanan PIN & Foto Struk (Medium) -->
+        <div class="bento-card bento-card-interactive" id="keamanan">
+          <div class="bento-glow"></div>
+          <div class="bento-icon-header">
+            <div class="bento-icon-box">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </div>
+          </div>
+          <h3 class="bento-title">Kunci PIN & Foto Struk</h3>
+          <p class="bento-desc">
+            Amankan catatan dari orang kepo dengan 6-digit PIN. Lampirkan foto struk belanjaan fisik langsung ke setiap transaksi.
+          </p>
+        </div>
+
+        <!-- Bento 6: Cadangan Terenkripsi (Medium) -->
+        <div class="bento-card bento-card-interactive">
+          <div class="bento-glow"></div>
+          <div class="bento-icon-header">
+            <div class="bento-icon-box">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            </div>
+          </div>
+          <h3 class="bento-title">Backup JSON Terenkripsi</h3>
+          <p class="bento-desc">
+            Mau ganti HP? Buat file backup dengan kata sandi AES kuat dan pulihkan data saat pertama kali buka aplikasi di ponsel baru.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Platform Guide Section -->
+  <section class="platform-section" id="perangkat">
+    <div class="section-container">
+      <div class="platform-card-wrapper">
+        <div class="platform-col android">
+          <div class="col-header">
+            <div class="platform-icon-circle android">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#CEFD37" stroke-width="2"><path d="M4 18l2-9M20 18l-2-9M9 5L7 2M15 5l2-3M6 9h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z"/></svg>
+            </div>
+            <div>
+              <h3 class="platform-title">Android Edition</h3>
+              <p class="platform-sub">Install via APK Bebas Hambatan</p>
+            </div>
+          </div>
+          <ul class="platform-steps">
+            <li><span>1</span> Klik tombol <strong>"Download APK Android"</strong> di website ini.</li>
+            <li><span>2</span> Buka file installer yang terunduh dan izinkan instalasi.</li>
+            <li><span>3</span> Selesai! Aplikasi Hitung siap digunakan selamanya.</li>
+          </ul>
+          <a id="btn-download-apk-bottom" href="#" class="btn-platform-action android">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Download APK Android (v2.0)
+          </a>
+        </div>
+
+        <div class="platform-col ios">
+          <div class="col-header">
+            <div class="platform-icon-circle ios">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2"><path d="M12 20.94c1.5 0 2.75 1.06 4 1.06 3 0 6-8 6-12.22A4.91 4.91 0 0 0 17 5c-2.22 0-4 1.44-5 2-1-.56-2.78-2-5-2a4.9 4.9 0 0 0-5 4.78C2 14 5 22 8 22c1.25 0 2.5-1.06 4-1.06Z"/><path d="M10 2c1 .5 2 2 2 5"/></svg>
+            </div>
+            <div>
+              <h3 class="platform-title">iPhone / iOS Edition</h3>
+              <p class="platform-sub">Web PWA Mandiri via Safari</p>
+            </div>
+          </div>
+          <ul class="platform-steps">
+            <li><span>1</span> Buka tautan Web App menggunakan <strong>Safari</strong> di iPhone.</li>
+            <li><span>2</span> Tekan tombol <strong>Share</strong> (kotak panah ke atas) di bawah layar.</li>
+            <li><span>3</span> Pilih <strong>"Tambahkan ke Layar Utama" (Add to Home Screen)</strong>.</li>
+          </ul>
+          <button id="btn-open-ios-bottom" class="btn-platform-action ios">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            Buka Web App di iPhone
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-container">
+      <div class="footer-brand">
+        <div class="logo-squircle small">
+          <span class="logo-h">h</span>
+          <span class="logo-dot"></span>
+        </div>
+        <span class="brand-name">hitung<span class="brand-period">.</span></span>
+        <span class="footer-tagline">Pencatat Pengeluaran Offline-First Gen Z</span>
+      </div>
+
+      <div class="footer-links">
+        <a href="https://github.com/yourmaj3sty/hitung-app" target="_blank" rel="noopener">GitHub</a>
+        <a href="/app">Web PWA</a>
+        <a href="#perangkat">Download</a>
+      </div>
+
+      <div class="footer-copy">
+        Crafted with ⚡ for Gen Z • Created by yourmaj3sty
+      </div>
+    </div>
+  </footer>
+
+  <!-- Modal: Panduan Pasang di iPhone (PWA) -->
+  <div class="modal-backdrop" id="ios-guide-modal">
+    <div class="modal-card">
+      <button class="modal-close" id="close-ios-modal">&times;</button>
+      <div class="modal-header">
+        <div class="modal-badge-apple">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2"><path d="M12 20.94c1.5 0 2.75 1.06 4 1.06 3 0 6-8 6-12.22A4.91 4.91 0 0 0 17 5c-2.22 0-4 1.44-5 2-1-.56-2.78-2-5-2a4.9 4.9 0 0 0-5 4.78C2 14 5 22 8 22c1.25 0 2.5-1.06 4-1.06Z"/></svg>
+        </div>
+        <h3 class="modal-title">Pasang Hitung di iPhone</h3>
+        <p class="modal-subtitle">Ikuti 2 langkah cepat agar aplikasi terpasang di layar utama iPhone-mu:</p>
+      </div>
+
+      <div class="modal-steps-container">
+        <div class="modal-step-item">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <span class="step-bold">Buka di browser Safari</span>
+            <span class="step-desc">Tekan ikon <strong>Share</strong> (kotak dengan panah mengarah ke atas) di menu bawah Safari.</span>
+          </div>
+        </div>
+        <div class="modal-step-item">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <span class="step-bold">Pilih "Add to Home Screen"</span>
+            <span class="step-desc">Gulir ke bawah, lalu tekan opsi <strong>"Tambahkan ke Layar Utama"</strong> dan tekan <strong>"Tambah"</strong>.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer-action">
+        <a href="/app" class="btn-primary-hero full-width">
+          Lanjut Buka Aplikasi Web
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: QR Code Scanner for Desktop Users -->
+  <div class="modal-backdrop" id="qr-modal">
+    <div class="modal-card qr-card">
+      <button class="modal-close" id="close-qr-modal">&times;</button>
+      <h3 class="modal-title">Buka di Ponsel</h3>
+      <p class="modal-subtitle">Arahkan kamera iPhone atau Android kamu ke QR code ini untuk membuka langsung di HP:</p>
+      
+      <div class="qr-code-box" id="qr-code-container">
+        <!-- Generated Dynamic SVG QR Code -->
+      </div>
+
+      <span class="qr-target-url" id="qr-url-text">https://hitung-app.vercel.app</span>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
 </body>
 </html>
