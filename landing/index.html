@@ -19,9 +19,13 @@
   <meta name="twitter:description" content="Aplikasi pencatat keuangan pribadi 100% offline, bebas iklan, dan privasi aman di perangkatmu.">
   <meta name="twitter:image" content="app_icon.png">
 
-  <!-- Favicon & Touch Icon -->
-  <link rel="icon" type="image/png" href="app_icon.png">
-  <link rel="apple-touch-icon" href="app_icon.png">
+  <!-- Favicon & Apple Touch Icons (iOS PWA) -->
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="/app/icons/Icon-192.png">
+  <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-precomposed.png">
+  <link rel="manifest" href="/app/manifest.json">
 
   <!-- Google Fonts: Plus Jakarta Sans -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -98,8 +102,8 @@
             <a id="main-cta-btn" href="#" class="btn-primary-hero">
               <span class="btn-icon" id="main-cta-icon"></span>
               <div class="btn-labels">
-                <span class="btn-title" id="main-cta-title">Unduh Aplikasi</span>
-                <span class="btn-subtitle" id="main-cta-subtitle">Mempersiapkan...</span>
+                <span class="btn-title" id="main-cta-title">Buka Aplikasi</span>
+                <span class="btn-subtitle" id="main-cta-subtitle">Catat Keuangan Tanpa Ribet</span>
               </div>
               <svg class="btn-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
             </a>
@@ -142,7 +146,7 @@
               <!-- Top Header Bar -->
               <div class="app-mock-header">
                 <div class="user-greeting">
-                  <span class="greeting-sub">Halo, Bintang 👋</span>
+                  <span class="greeting-sub">Halo, Pengguna 👋</span>
                   <span class="greeting-title">Dashboard Finansial</span>
                 </div>
                 <div class="mock-bell-icon">
@@ -179,21 +183,21 @@
                 <div class="mock-wallet-chip active">
                   <span class="wallet-icon">🏦</span>
                   <div class="wallet-info">
-                    <span class="w-name">BCA Utama</span>
+                    <span class="w-name">Rekening Utama</span>
                     <span class="w-val">Rp 12.800.000</span>
                   </div>
                 </div>
                 <div class="mock-wallet-chip">
                   <span class="wallet-icon">⚡</span>
                   <div class="wallet-info">
-                    <span class="w-name">GoPay Jajan</span>
+                    <span class="w-name">Dompet Digital</span>
                     <span class="w-val">Rp 650.000</span>
                   </div>
                 </div>
                 <div class="mock-wallet-chip savings">
                   <span class="wallet-icon">🎯</span>
                   <div class="wallet-info">
-                    <span class="w-name">Target Laptop</span>
+                    <span class="w-name">Target Tabungan</span>
                     <span class="w-progress">82% tercapai</span>
                   </div>
                 </div>
@@ -205,8 +209,8 @@
                 <div class="mock-tx-item">
                   <div class="tx-icon-box food">☕</div>
                   <div class="tx-details">
-                    <span class="tx-name">Kopi Kenangan Susu</span>
-                    <span class="tx-meta">Hari ini • GoPay Jajan</span>
+                    <span class="tx-name">Kopi Susu Gula Aren</span>
+                    <span class="tx-meta">Hari ini • Dompet Digital</span>
                   </div>
                   <span class="tx-amount minus">-Rp 28.000</span>
                 </div>
@@ -214,15 +218,15 @@
                   <div class="tx-icon-box income">💼</div>
                   <div class="tx-details">
                     <span class="tx-name">Gaji Freelance UI</span>
-                    <span class="tx-meta">Kemarin • BCA Utama</span>
+                    <span class="tx-meta">Kemarin • Rekening Utama</span>
                   </div>
                   <span class="tx-amount plus">+Rp 6.500.000</span>
                 </div>
                 <div class="mock-tx-item">
                   <div class="tx-icon-box ent">🍿</div>
                   <div class="tx-details">
-                    <span class="tx-name">Spotify Duo Bulanan</span>
-                    <span class="tx-meta">25 Okt • Dana</span>
+                    <span class="tx-name">Langganan Musik Bulanan</span>
+                    <span class="tx-meta">25 Okt • Dompet Harian</span>
                   </div>
                   <span class="tx-amount minus">-Rp 79.000</span>
                 </div>
@@ -291,7 +295,7 @@
           </div>
           <h3 class="bento-title">Multi-Dompet & Kantong Target</h3>
           <p class="bento-desc">
-            Pisahkan saldo Bank (BCA, Mandiri, Jago), E-Wallet (GoPay, OVO, Dana), hingga target tabungan dengan indikator visual otomatis.
+            Pisahkan saldo Rekening Bank, Dompet Digital (E-Wallet), Uang Tunai, hingga target tabungan dengan indikator visual otomatis.
           </p>
         </div>
 
@@ -447,7 +451,7 @@
       </div>
 
       <div class="modal-footer-action">
-        <a href="/app" class="btn-primary-hero full-width">
+        <a href="/app/" class="btn-primary-hero full-width">
           Lanjut Buka Aplikasi Web
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
         </a>

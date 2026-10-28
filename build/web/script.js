@@ -44,11 +44,11 @@
 
     mainCtaIcon.innerHTML = ICON_APPLE;
     mainCtaTitle.textContent = 'Buka Web App di iPhone';
-    mainCtaSubtitle = 'PWA Siap Pasang • Tanpa App Store';
+    if (mainCtaSubtitle) mainCtaSubtitle.textContent = 'PWA Siap Pasang • Tanpa App Store';
     mainCtaBtn.href = PWA_APP_URL;
 
     mainCtaBtn.addEventListener('click', (e) => {
-      // Show iOS installation guide before navigating
+      e.preventDefault();
       openIosModal();
     });
 
