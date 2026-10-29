@@ -2,6 +2,13 @@
   "version": 2,
   "outputDirectory": "build/web",
   "cleanUrls": true,
+  "redirects": [
+    {
+      "source": "/hitung-app.apk",
+      "destination": "/app-release.apk",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/app",
@@ -27,7 +34,7 @@
       ]
     },
     {
-      "source": "/(.*).apk",
+      "source": "/app-release.apk",
       "headers": [
         {
           "key": "Content-Type",
@@ -35,7 +42,7 @@
         },
         {
           "key": "Content-Disposition",
-          "value": "attachment; filename=hitung-app.apk"
+          "value": "attachment; filename=app-release.apk"
         }
       ]
     }

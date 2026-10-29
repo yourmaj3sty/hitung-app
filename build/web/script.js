@@ -28,8 +28,8 @@
   const btnDownloadApkBottom = document.getElementById('btn-download-apk-bottom');
   const btnOpenIosBottom = document.getElementById('btn-open-ios-bottom');
 
-  // Direct APK Download URL (Hosted directly on website for instant 1-click download)
-  const APK_DOWNLOAD_URL = '/hitung-app.apk';
+  // Direct APK Download URL (Directly matches app-release.apk)
+  const APK_DOWNLOAD_URL = '/app-release.apk';
   const PWA_APP_URL = '/app';
 
   // Icons SVG
@@ -66,7 +66,7 @@
     mainCtaTitle.textContent = 'Download APK Android';
     mainCtaSubtitle.textContent = 'v2.0 • Offline-First • 77 MB';
     mainCtaBtn.href = APK_DOWNLOAD_URL;
-    mainCtaBtn.setAttribute('download', 'hitung-app.apk');
+    mainCtaBtn.setAttribute('download', 'app-release.apk');
 
     secondaryCtaBtn.href = PWA_APP_URL;
     secondaryCtaText.textContent = 'Coba Versi Web';
@@ -84,7 +84,7 @@
     mainCtaTitle.textContent = 'Download APK Android';
     mainCtaSubtitle.textContent = 'v2.0 • Offline-First Native APK';
     mainCtaBtn.href = APK_DOWNLOAD_URL;
-    mainCtaBtn.setAttribute('download', 'hitung-app.apk');
+    mainCtaBtn.setAttribute('download', 'app-release.apk');
 
     secondaryCtaBtn.href = PWA_APP_URL;
     secondaryCtaText.textContent = 'Buka Web App (iOS PWA)';
@@ -97,7 +97,7 @@
 
   if (btnDownloadApkBottom) {
     btnDownloadApkBottom.href = APK_DOWNLOAD_URL;
-    btnDownloadApkBottom.setAttribute('download', 'hitung-app.apk');
+    btnDownloadApkBottom.setAttribute('download', 'app-release.apk');
   }
 
   if (btnOpenIosBottom) {
